@@ -216,3 +216,8 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+/.vscode
+/guides
+/guides
+log.txt
+26as.json
