@@ -864,7 +864,6 @@ document.addEventListener('DOMContentLoaded', () => {
       try {
         const response = await apiFetch('/api/verify-user', { pan: pan });
         if (state.isSingleCancelled) return;
-x₹x
         if (!response.ok) {
           throw new Error(`Backend returned HTTP ${response.status}`);
         }
