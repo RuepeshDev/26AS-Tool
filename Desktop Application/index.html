@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>26AS Retrieval Portal - Desktop App</title>
+  <link rel="stylesheet" href="./src/style.css" />
+</head>
+<body>
+  <div id="app" class="app-container">
+    <!-- Header -->
+    <header class="app-header">
+      <div class="brand">
+        <div class="logo-icon">📊</div>
+        <div>
+          <h1>Form 26AS Retrieval Portal</h1>
+          <p class="subtitle">Standalone Windows Desktop Application</p>
+        </div>
+      </div>
+      <div class="status-badge" id="supabaseStatusBadge">
+        <span class="dot"></span> Supabase Ready
+      </div>
+    </header>
+
+    <!-- Main Grid -->
+    <main class="main-content">
+      <!-- Input Panel -->
+      <section class="panel input-panel">
+        <h2>Credentials & Assessment Year</h2>
+
+        <div class="form-group">
+          <label for="assessmentYear">Assessment Year</label>
+          <select id="assessmentYear" class="form-control">
+            <option value="2025-26">2025-26</option>
+            <option value="2024-25" selected>2024-25</option>
+            <option value="2023-24">2023-24</option>
+            <option value="2022-23">2022-23</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label for="panList">PAN & Password List (Format: PAN, Password)</label>
+          <textarea
+            id="panList"
+            class="form-control code-textarea"
+            rows="8"
+            placeholder="ABCDE1234F, MyPassword123&#10;XYZPK9876Q, SecurePass456"
+          ></textarea>
+        </div>
+
+        <div class="action-buttons">
+          <button id="btnStart" class="btn btn-primary">▶ Start Bulk Retrieval</button>
+          <button id="btnClear" class="btn btn-secondary">Clear Inputs</button>
+        </div>
+      </section>
+
+      <!-- Dashboard & Logs Panel -->
+      <section class="panel metrics-panel">
+        <h2>Execution Statistics & Live Logs</h2>
+
+        <!-- Stats Cards -->
+        <div class="stats-grid">
+          <div class="stat-card">
+            <span class="stat-label">Successful</span>
+            <span class="stat-value text-success" id="statSuccess">0</span>
+          </div>
+          <div class="stat-card">
+            <span class="stat-label">Failed</span>
+            <span class="stat-value text-danger" id="statFailed">0</span>
+          </div>
+          <div class="stat-card">
+            <span class="stat-label">Disposed Time</span>
+            <span class="stat-value" id="statDisposed">0.0s</span>
+          </div>
+        </div>
+
+        <!-- Progress Bar -->
+        <div class="progress-container">
+          <div class="progress-bar" id="progressBar" style="width: 0%"></div>
+        </div>
+
+        <!-- Terminal Logs -->
+        <div class="logs-container">
+          <div class="logs-header">
+            <span>Terminal Execution Log</span>
+            <button id="btnClearLogs" class="btn-text">Clear Log</button>
+          </div>
+          <pre id="logConsole" class="log-console">Ready to begin batch retrieval...</pre>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <script type="module" src="./src/app.js"></script>
+</body>
+</html>
