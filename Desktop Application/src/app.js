@@ -990,11 +990,7 @@ document.addEventListener('DOMContentLoaded', () => {
             trackLog('➜', 'info', `Logging out`);
             
             try {
-              const response = await fetch(`${API_BASE}/api/logout`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ pan: pan })
-              });
+              const response = await apiFetch('/api/logout', { pan: pan });
               if (state.isSingleCancelled) return;
               if (!response.ok) throw new Error(`HTTP ${response.status}`);
               data = await response.json();
@@ -2266,11 +2262,7 @@ XYZAB5678Q, pass1234, 2024-25`;
           if (isDesktop && window.__TAURI_INTERNALS__?.invoke) {
             data = await window.__TAURI_INTERNALS__.invoke('execute_phase1_connect', { pan: item.pan });
           } else {
-            const response = await fetch(`${API_BASE}/api/connect`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ pan: item.pan })
-            });
+            const response = await apiFetch('/api/connect', { pan: item.pan });
             if (!response.ok) throw new Error(`HTTP ${response.status}`);
             data = await response.json();
           }
@@ -2451,11 +2443,7 @@ XYZAB5678Q, pass1234, 2024-25`;
               const logoutLine = stepStart(`Logging out`);
               updateRowProgress(98);
               try {
-                const logoutResp = await fetch(`${API_BASE}/api/logout`, {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({ pan: item.pan })
-                });
+                const logoutResp = await apiFetch('/api/logout', { pan: item.pan });
                 const logoutData = logoutResp.ok ? await logoutResp.json() : { status: 'failed' };
                 if (logoutData.status === 'success') {
                   stepSuccess(logoutLine, `Logging out`);
@@ -2517,11 +2505,7 @@ XYZAB5678Q, pass1234, 2024-25`;
           updateRowProgress(80);
           
           try {
-            const response = await fetch(`${API_BASE}/api/handle-dual-login`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ pan: item.pan, originalResponse: originalResponse })
-            });
+            const response = await apiFetch('/api/handle-dual-login', { pan: item.pan, originalResponse: originalResponse });
             if (!response.ok) throw new Error(`HTTP ${response.status}`);
             data = await response.json();
           } catch (err) {
