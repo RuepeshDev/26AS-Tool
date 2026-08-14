@@ -116,4 +116,24 @@ The automatic updater feature is fully configured in the application code ([`src
    - Create a Secret named **`TAURI_SIGNING_PRIVATE_KEY`** and paste your private key string.
    - (Optional) If your private key has a password, create a secret named **`TAURI_SIGNING_PRIVATE_KEY_PASSWORD`**.
 
+---
+
+## 8. Branch Segregation: Developer Testing vs Production Release
+
+### A. Developer Debugging Branch (`tauri-dev`)
+- **Purpose**: Internal testing and debugging environment only.
+- **What happens on push**:
+  1. GitHub Actions compiles a **Debug Build** (`npx tauri build --debug`) with Webview DevTools enabled.
+  2. Uploads the debug installer `.exe` as a GitHub Actions Build Artifact named **`26AS-Desktop-App-DEV-DEBUG`**.
+  3. Does **NOT** publish a public GitHub release or trigger auto-updates.
+  4. You can download this `.exe` from GitHub Actions, run it on Windows, right-click, and select **Inspect Element / F12 DevTools** to view all developer console logs!
+
+### B. Production Release Branch (`tauri`)
+- **Purpose**: Official public release build for end-users.
+- **What happens on push**:
+  1. GitHub Actions compiles an **Optimized Release Build** (`npm run tauri build`) with DevTools disabled and max minification.
+  2. Signs the executable using your private key (`TAURI_SIGNING_PRIVATE_KEY`).
+  3. Automatically publishes an official **GitHub Release** with `latest.json` auto-updater manifest attached.
+
+
 

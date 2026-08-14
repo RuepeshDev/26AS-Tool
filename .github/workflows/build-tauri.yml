@@ -1,4 +1,4 @@
-name: Release Tauri Desktop App & Auto-Updater
+name: Tauri Desktop CI/CD (Dev Debug & Production Release)
 
 on:
   push:
@@ -10,7 +10,59 @@ on:
   workflow_dispatch:
 
 jobs:
-  release-tauri:
+  # =========================================================
+  # JOB 1: DEVELOPER TESTING BUILD (Triggers on `tauri-dev`)
+  # =========================================================
+  dev-debug-build:
+    if: github.ref == 'refs/heads/tauri-dev'
+    permissions:
+      contents: read
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: 'npm'
+          cache-dependency-path: 'Desktop Application/package-lock.json'
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-pc-windows-msvc
+
+      - name: Rust Cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: 'Desktop Application/src-tauri -> target'
+
+      - name: Install dependencies
+        working-directory: './Desktop Application'
+        run: npm install
+
+      - name: Build Debug Executable (With Webview DevTools)
+        working-directory: './Desktop Application'
+        run: npx tauri build --debug
+
+      - name: Upload Developer Debug Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: 26AS-Desktop-App-DEV-DEBUG
+          path: |
+            Desktop Application/src-tauri/target/debug/bundle/nsis/*.exe
+            Desktop Application/src-tauri/target/debug/bundle/msi/*.msi
+            Desktop Application/src-tauri/target/debug/*.exe
+          if-no-files-found: warn
+
+  # =========================================================
+  # JOB 2: PRODUCTION RELEASE BUILD (Triggers on `tauri` & Tags)
+  # =========================================================
+  prod-release-build:
+    if: github.ref == 'refs/heads/tauri' || startsWith(github.ref, 'refs/tags/v')
     permissions:
       contents: write
     runs-on: windows-latest
@@ -40,7 +92,7 @@ jobs:
         working-directory: './Desktop Application'
         run: npm install
 
-      - name: Build & Publish Tauri App (With Updater Signatures)
+      - name: Build & Publish Production Tauri App
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -50,6 +102,6 @@ jobs:
           projectPath: './Desktop Application'
           tagName: v__VERSION__
           releaseName: '26AS Desktop Portal v__VERSION__'
-          releaseBody: 'Automated release with auto-updater binaries.'
+          releaseBody: 'Production release with auto-updater binaries.'
           releaseDraft: false
           prerelease: false
