@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.1//EN" "http://www.w3.org/TR/xhtml11/DTD/xhtml11.dtd" >
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+    <title>TRACES | Sandbox PDF Exporter</title>
+    <!-- Sandbox bootstrap must be loaded first to mock variables/intercept pdfMake calls -->
+    <script type="text/javascript" src="sandbox_bootstrap.js"></script>
+</head>
+<body>
+    <div id="dyncontent" style="display: none;">
+        <!-- Hidden inputs and spans read by export26ASPdf -->
+        <span id="pan"></span>
+        <span id="dedPanName"></span>
+        <span id="assessYearSelectedVal"></span>
+        <span id="inp"></span>
+        <span id="panStatus"></span>
+        <div id="financialYear"></div>
+        <span id="add1"></span>
+        <span id="add2"></span>
+
+        <!-- Hidden image elements referenced by export26ASPdf -->
+        <img id="logo" src="assets/tds-logo.png" />
+        <img id="emblem" src="assets/indianemblem.png" />
+        <img id="watermark" src="assets/watermark.png" />
+    </div>
+
+    <!-- Core PDF generation libraries and helper scripts -->
+    <script type="text/javascript" src="assets/pdfmake.min.js"></script>
+    <script type="text/javascript" src="assets/vfs_fonts.js"></script>
+    <script type="text/javascript" src="traces_globals.js"></script>
+    <script type="text/javascript" src="export_26as_pdf.js"></script>
+</body>
+</html>

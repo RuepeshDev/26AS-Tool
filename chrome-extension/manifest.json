@@ -1,0 +1,46 @@
+{
+  "manifest_version": 3,
+  "name": "Form 26AS PDF Exporter Companion",
+  "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAzoK6rSjZC8f15+oQoIREeHmK2dF1DDlDT91NWM47ZGyk+WseUqQWgo2XUg4NGgJhDUpYYre8Lr/uqAWZ+21OSjxfHX+wazz3phdjSoSLJRXJkkpJkWW0UWTanqWsmTdVLJDilz7NT7W83dzK2uugS7Oxu4JtQTZZSPAtDCE1iKcoZzRtWwYsQfVs7c9qwfUsCIuPlcWGIicz6tkxZXu60BG2S5hCyS0yQ0IF+9a4pbe/xj7iC54lpkkzhHV2CM97vXMZfQWPAXwKv/cqXeDuOpsuYGZD9oEl5t8yzFvUN9X2R77tqthSswuyYm1ss3haERvo6Qt/it3ZweR2+9amsQIDAQAB",
+  "version": "1.0.0",
+  "description": "Companion extension to securely download Form 26AS PDFs locally.",
+  "permissions": [
+    "downloads",
+    "offscreen"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "externally_connectable": {
+    "matches": [
+      "http://localhost/*",
+      "http://127.0.0.1/*",
+      "https://your-deployed-website.com/*"
+    ]
+  },
+  "content_security_policy": {
+    "extension_pages": "script-src 'self'; object-src 'self'",
+    "sandbox": "sandbox allow-scripts; script-src 'self' 'unsafe-eval'; child-src 'self'"
+  },
+  "sandbox": {
+    "pages": [
+      "sandbox.html"
+    ]
+  },
+  "web_accessible_resources": [
+    {
+      "resources": [
+        "pdf_renderer.html",
+        "renderer_bootstrap.js",
+        "traces_globals.js",
+        "export_26as_pdf.js",
+        "sandbox.html",
+        "sandbox_bootstrap.js",
+        "assets/*"
+      ],
+      "matches": [
+        "<all_urls>"
+      ]
+    }
+  ]
+}
