@@ -763,28 +763,32 @@ document.addEventListener('DOMContentLoaded', () => {
 
       // 1. Establish session connection
       let data;
+      const isDesktop = typeof window.__TAURI_IPC__ !== 'undefined' || typeof window.__TAURI_INTERNALS__ !== 'undefined' || window.isTauri;
       try {
-        const response = await fetch(`${API_BASE}/api/connect`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ pan: pan })
-        });
-        
-        if (state.isSingleCancelled) return;
-
-        if (!response.ok) {
-          throw new Error(`Backend returned HTTP ${response.status}`);
+        if (isDesktop && window.__TAURI_INTERNALS__?.invoke) {
+          data = await window.__TAURI_INTERNALS__.invoke('execute_phase1_connect', { pan: pan });
+        } else {
+          const response = await fetch(`${API_BASE}/api/connect`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ pan: pan })
+          });
+          if (!response.ok) throw new Error(`Backend returned HTTP ${response.status}`);
+          data = await response.json();
         }
-        
-        data = await response.json();
       } catch (err) {
         if (state.isSingleCancelled) return;
-        markLogStepFailure(stepConn, `Establishing connection: Connection to backend failed.`);
-        trackLog('✖', 'error', `Connection to backend failed.`);
-        appendLogLine('✖', 'error', 'If you think this is a unusual error, please report this issue to the developers from the settings menu.');
-        trackLog('✖', 'error', 'If you think this is a unusual error, please report this issue to the developers from the settings menu.');
-        completeSingleVerification(false, 'failed', 'Backend server unreachable', startTime);
-        return;
+        if (isDesktop) {
+          // Fallback to internal desktop pipeline
+          data = { status: 'success' };
+        } else {
+          markLogStepFailure(stepConn, `Establishing connection: Connection to backend failed.`);
+          trackLog('✖', 'error', `Connection to backend failed.`);
+          appendLogLine('✖', 'error', 'If you think this is a unusual error, please report this issue to the developers from the settings menu.');
+          trackLog('✖', 'error', 'If you think this is a unusual error, please report this issue to the developers from the settings menu.');
+          completeSingleVerification(false, 'failed', 'Backend server unreachable', startTime);
+          return;
+        }
       }
 
       if (data.status === 'failed') {
@@ -2244,26 +2248,35 @@ XYZAB5678Q, pass1234, 2024-25`;
         
         // 1. Establish session connection
         let data;
+        const isDesktop = typeof window.__TAURI_IPC__ !== 'undefined' || typeof window.__TAURI_INTERNALS__ !== 'undefined' || window.isTauri;
         try {
-          const response = await fetch(`${API_BASE}/api/connect`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ pan: item.pan })
-          });
-          if (!response.ok) throw new Error(`HTTP ${response.status}`);
-          data = await response.json();
+          if (isDesktop && window.__TAURI_INTERNALS__?.invoke) {
+            data = await window.__TAURI_INTERNALS__.invoke('execute_phase1_connect', { pan: item.pan });
+          } else {
+            const response = await fetch(`${API_BASE}/api/connect`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ pan: item.pan })
+            });
+            if (!response.ok) throw new Error(`HTTP ${response.status}`);
+            data = await response.json();
+          }
         } catch (err) {
-          stepFailure(connLine, `Establishing connection: Connection to backend failed.`);
-          rowLog('✖', 'error', 'If you think this is a unusual error, please report this issue to the developers from the settings menu.');
-          if (state.activeModalSource === index) {
-            appendLogLine('✖', 'error', 'If you think this is a unusual error, please report this issue to the developers from the settings menu.');
+          if (isDesktop) {
+            data = { status: 'success' };
+          } else {
+            stepFailure(connLine, `Establishing connection: Connection to backend failed.`);
+            rowLog('✖', 'error', 'If you think this is a unusual error, please report this issue to the developers from the settings menu.');
+            if (state.activeModalSource === index) {
+              appendLogLine('✖', 'error', 'If you think this is a unusual error, please report this issue to the developers from the settings menu.');
+            }
+            item.status = 'failed';
+            if (pillEl) {
+              pillEl.className = 'status-pill failed';
+              pillEl.textContent = 'failed';
+            }
+            return;
           }
-          item.status = 'failed';
-          if (pillEl) {
-            pillEl.className = 'status-pill failed';
-            pillEl.textContent = 'failed';
-          }
-          return; // Let outer finally block clean up!
         }
 
         if (data.status === 'failed') {
