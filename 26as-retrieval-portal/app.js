@@ -1683,29 +1683,15 @@ XYZAB5678Q, pass1234, 2024-25`;
         </div>
       `;
 
-      const consoleBtn = `
-        <button class="action-mini-btn btn-console" id="btn-console-${index}" title="View Live Console">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="12" height="12">
-            <polyline points="4 17 10 11 4 5"></polyline>
-            <line x1="12" y1="19" x2="20" y2="19"></line>
-          </svg>
-        </button>
-      `;
-      
       tr.innerHTML = `
         <td>${checkboxHtml}<span class="sr-num">${index + 1}</span></td>
         <td><code>${item.pan}</code></td>
         <td>${item.ay}</td>
         <td>${statusPill}</td>
         <td>${progressIndicator}</td>
-        <td>${consoleBtn}</td>
       `;
       
       bulkQueueBody.appendChild(tr);
-
-      document.getElementById(`btn-console-${index}`).addEventListener('click', () => {
-        openBulkConsoleModal(index);
-      });
     });
 
     const checkboxes = document.querySelectorAll('.bulk-row-checkbox');
@@ -1876,6 +1862,24 @@ XYZAB5678Q, pass1234, 2024-25`;
         btnBulkSelect.textContent = "Select Entries";
       }
       renderBulkQueueTable();
+    });
+  }
+
+  // Handle clicking failed status pills to view specific error messages
+  if (bulkQueueTable) {
+    bulkQueueTable.addEventListener('click', (e) => {
+      const pill = e.target.closest('.status-pill.failed');
+      if (!pill) return;
+      
+      const match = pill.id.match(/row-status-pill-(\d+)/);
+      if (!match) return;
+      
+      const index = parseInt(match[1]);
+      const item = state.bulkQueue[index];
+      if (item && item.status === 'failed') {
+        const errMsg = item.errorMessage || "Unknown error occurred during retrieval.";
+        alert(`PAN: ${item.pan}\nAssessment Year: ${item.ay}\n\nError Reason: ${errMsg}`);
+      }
     });
   }
 
@@ -2083,6 +2087,7 @@ XYZAB5678Q, pass1234, 2024-25`;
 
     const stepFailure = (el, text) => {
       rowLog('✖', 'error', text);
+      item.errorMessage = text; // Capture specific step error message
       if (el && state.activeModalSource === index) {
         markLogStepFailure(el);
       }
@@ -2636,6 +2641,7 @@ XYZAB5678Q, pass1234, 2024-25`;
 
     } catch (err) {
       item.status = 'failed';
+      item.errorMessage = err.message || 'Suspended unexpectedly.';
       if (pillEl) {
         pillEl.className = 'status-pill failed';
         pillEl.textContent = 'failed';
