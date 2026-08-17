@@ -236,19 +236,8 @@ document.addEventListener('DOMContentLoaded', () => {
   // ==========================================
   // DOM ELEMENT SELECTIONS
   // ==========================================
-  // Theme & settings elements
-  const settingsToggleBtn = document.getElementById('settings-toggle-btn');
-  const settingsCloseBtn = document.getElementById('settings-close-btn');
-  const settingsPanel = document.getElementById('settings-panel');
-  const themeDarkBtn = document.getElementById('theme-dark-btn');
-  const themeLightBtn = document.getElementById('theme-light-btn');
-  const themeSystemBtn = document.getElementById('theme-system-btn');
-  const connDemoBtn = document.getElementById('conn-demo-btn');
-  const connLiveBtn = document.getElementById('conn-live-btn');
-  const btnCheckUpdates = document.getElementById('btn-check-updates');
-  const btnViewChangelog = document.getElementById('btn-view-changelog');
-  const updaterStatus = document.getElementById('updater-status');
-  const paletteOptions = document.querySelectorAll('.palette-option');
+  // Theme Toggle Element
+  const themeToggleBtn = document.getElementById('theme-toggle-btn');
   
   // Navigation
   const tabSingle = document.getElementById('tab-single');
@@ -334,18 +323,15 @@ document.addEventListener('DOMContentLoaded', () => {
   const modalCancelBtn = document.getElementById('modal-cancel-btn');
 
   // ==========================================
-  // PREFERENCE LOADING (THEME & ACCENT)
+  // PREFERENCE LOADING (THEME)
   // ==========================================
-  const systemThemeMedia = window.matchMedia('(prefers-color-scheme: dark)');
   
   function initTheme() {
-    // Load from localStorage
+    // Load from localStorage (default to dark)
     const savedTheme = localStorage.getItem('traces-theme') || 'dark';
-    const savedPalette = localStorage.getItem('traces-palette') || 'blue';
-    const savedConnMode = localStorage.getItem('traces-conn-mode') || 'demo';
+    const savedConnMode = localStorage.getItem('traces-conn-mode') || 'live'; // default to live for deployed web
     
     setThemeMode(savedTheme);
-    setAccentPalette(savedPalette);
     setConnectionMode(savedConnMode);
   }
 
@@ -353,60 +339,26 @@ document.addEventListener('DOMContentLoaded', () => {
     state.theme = mode;
     localStorage.setItem('traces-theme', mode);
     
-    // Clear active classes
-    themeLightBtn.classList.remove('active');
-    themeDarkBtn.classList.remove('active');
-    themeSystemBtn.classList.remove('active');
+    const sunIcon = themeToggleBtn.querySelector('.sun-icon');
+    const moonIcon = themeToggleBtn.querySelector('.moon-icon');
     
-    // Set active class on active button selector
     if (mode === 'light') {
-      themeLightBtn.classList.add('active');
-      applyThemeCSS('light');
-    } else if (mode === 'dark') {
-      themeDarkBtn.classList.add('active');
-      applyThemeCSS('dark');
-    } else {
-      themeSystemBtn.classList.add('active');
-      // Apply system pref
-      applyThemeCSS(systemThemeMedia.matches ? 'dark' : 'light');
-    }
-  }
-
-  function applyThemeCSS(theme) {
-    if (theme === 'light') {
       document.body.classList.remove('theme-dark');
       document.body.classList.add('theme-light');
+      
+      if (sunIcon) sunIcon.style.display = 'none';
+      if (moonIcon) moonIcon.style.display = 'block';
     } else {
       document.body.classList.remove('theme-light');
       document.body.classList.add('theme-dark');
+      
+      if (sunIcon) sunIcon.style.display = 'block';
+      if (moonIcon) moonIcon.style.display = 'none';
     }
   }
 
-  // Monitor system color scheme changes
-  systemThemeMedia.addEventListener('change', (e) => {
-    if (state.theme === 'system') {
-      applyThemeCSS(e.matches ? 'dark' : 'light');
-    }
-  });
-
-  function setAccentPalette(palette) {
-    state.palette = palette;
-    localStorage.setItem('traces-palette', palette);
-    
-    // Remove all palette classes
-    document.body.classList.remove('palette-blue', 'palette-emerald', 'palette-amethyst', 'palette-orange');
-    // Add current selection
-    document.body.classList.add(`palette-${palette}`);
-    
-    // Update settings buttons
-    paletteOptions.forEach(opt => {
-      if (opt.getAttribute('data-palette') === palette) {
-        opt.classList.add('active');
-      } else {
-        opt.classList.remove('active');
-      }
-    });
-  }
+  // Set default accent palette style to electric blue natively
+  document.body.classList.add('palette-blue');
 
   // Chrome Extension Identification for Local Exporter
   const EXTENSION_ID = 'bdbfbimncembaafobijknhndklpidkki';
@@ -461,93 +413,13 @@ document.addEventListener('DOMContentLoaded', () => {
     checkExtension();
   }
 
-  // Bind settings toggle drawer
-  settingsToggleBtn.addEventListener('click', () => {
-    settingsPanel.classList.toggle('open');
-  });
-  settingsCloseBtn.addEventListener('click', () => {
-    settingsPanel.classList.remove('open');
-  });
-  
-  // Theme listeners
-  themeDarkBtn.addEventListener('click', () => setThemeMode('dark'));
-  themeLightBtn.addEventListener('click', () => setThemeMode('light'));
-  themeSystemBtn.addEventListener('click', () => setThemeMode('system'));
-  
-  // Connection Mode listeners
-  connDemoBtn.addEventListener('click', () => setConnectionMode('demo'));
-  connLiveBtn.addEventListener('click', () => {
-    setConnectionMode('live');
-    // Alert info
-    alert("Live Fetch Mode activated.");
-  });
-
-  // Software Updates simulation
-  btnCheckUpdates.addEventListener('click', () => {
-    btnCheckUpdates.disabled = true;
-    updaterStatus.textContent = "Checking for updates...";
-    
-    setTimeout(() => {
-      updaterStatus.textContent = "You are running the latest version (v1.0.0).";
-      btnCheckUpdates.disabled = false;
-    }, 1500);
-  });
-
-  // View Changelog stream logs
-  btnViewChangelog.addEventListener('click', () => {
-    state.activeModalSource = 'changelog';
-    showTerminalModal("Secure 26AS Downloader - Changelog Engine");
-    
-    const logs = [
-      { char: '➜', style: 'info', msg: 'Querying local manifest changelogs...' },
-      { char: '✔', style: 'success', msg: 'Local changelog payload loaded successfully.' },
-      { char: '➜', style: 'info', msg: '---------------------------------------------------' },
-      { char: '➜', style: 'info', msg: 'VERSION CHANGELOG: v1.0.0 (Release build)' },
-      { char: '✔', style: 'success', msg: '* Implemented async background concurrent downloader loops.' },
-      { char: '✔', style: 'success', msg: '* Added modular glassmorphism display settings drawer.' },
-      { char: '✔', style: 'success', msg: '* Added Light, Dark, and System preference theme settings.' },
-      { char: '✔', style: 'success', msg: '* Added HSL based accent theme customization options.' },
-      { char: '✔', style: 'success', msg: '* Implemented dual-session active token overrides.' },
-      { char: '✔', style: 'success', msg: '* Configured printable tax credit statement generator nodes.' },
-      { char: '➜', style: 'info', msg: '---------------------------------------------------' },
-      { char: '✔', style: 'success', msg: 'Changelog display complete. Closing session.' }
-    ];
-    
-    // Stream line by line
-    let step = 0;
-    const interval = setInterval(() => {
-      if (state.activeModalSource !== 'changelog') {
-        clearInterval(interval);
-        return; // Closed/backgrounded early
-      }
-      
-      if (step < logs.length) {
-        const log = logs[step];
-        appendLogLine(log.char, log.style, log.msg);
-        step++;
-      } else {
-        clearInterval(interval);
-        closeModalBtn.disabled = false;
-        modalCloseActionBtn.disabled = false;
-        terminalStatusLight.className = 'status-indicator-light success';
-        terminalStatusText.textContent = 'Changelog loaded.';
-      }
-    }, 200);
-  });
-
-  paletteOptions.forEach(btn => {
-    btn.addEventListener('click', () => {
-      const pal = btn.getAttribute('data-palette');
-      setAccentPalette(pal);
+  // Bind theme toggle button
+  if (themeToggleBtn) {
+    themeToggleBtn.addEventListener('click', () => {
+      const targetTheme = state.theme === 'dark' ? 'light' : 'dark';
+      setThemeMode(targetTheme);
     });
-  });
-
-  // Close drawer if clicking outside
-  document.addEventListener('click', (e) => {
-    if (!settingsPanel.contains(e.target) && !settingsToggleBtn.contains(e.target)) {
-      settingsPanel.classList.remove('open');
-    }
-  });
+  }
 
   // ==========================================
   // TAB NAVIGATION
