@@ -412,10 +412,8 @@ document.addEventListener('DOMContentLoaded', () => {
   const EXTENSION_ID = 'bdbfbimncembaafobijknhndklpidkki';
 
   function updateDownloadStatus() {
-    const isDesktop = typeof window.__TAURI_IPC__ !== 'undefined';
-    
-    // In Demo mode or Desktop mode (Tauri), we allow PDF generation natively
-    if (state.connectionMode === 'demo' || isDesktop) {
+    // In Demo mode, we allow PDF generation natively (using the web print window)
+    if (state.connectionMode === 'demo') {
       downloadPdfSingle.disabled = false;
       if (extensionWarning) extensionWarning.classList.add('hidden');
       return;
@@ -481,7 +479,7 @@ document.addEventListener('DOMContentLoaded', () => {
   connLiveBtn.addEventListener('click', () => {
     setConnectionMode('live');
     // Alert info
-    alert("Live Fetch Mode activated. Note: Connection nodes must be configured on client config keys in Tauri bundle environment.");
+    alert("Live Fetch Mode activated.");
   });
 
   // Software Updates simulation
@@ -501,7 +499,7 @@ document.addEventListener('DOMContentLoaded', () => {
     showTerminalModal("Secure 26AS Downloader - Changelog Engine");
     
     const logs = [
-      { char: '➜', style: 'info', msg: 'Querying local Tauri manifest changelogs...' },
+      { char: '➜', style: 'info', msg: 'Querying local manifest changelogs...' },
       { char: '✔', style: 'success', msg: 'Local changelog payload loaded successfully.' },
       { char: '➜', style: 'info', msg: '---------------------------------------------------' },
       { char: '➜', style: 'info', msg: 'VERSION CHANGELOG: v1.0.0 (Release build)' },
@@ -1550,10 +1548,8 @@ document.addEventListener('DOMContentLoaded', () => {
   downloadPdfSingle.addEventListener('click', () => {
     if (!state.singleData) return;
 
-    const isDesktop = typeof window.__TAURI_IPC__ !== 'undefined';
-
-    // 1. Demo Mode or Desktop Mode:
-    if (state.connectionMode === 'demo' || isDesktop) {
+    // 1. Demo Mode:
+    if (state.connectionMode === 'demo') {
       if (state.pdfBase64) {
         const link = document.createElement('a');
         link.href = `data:application/pdf;base64,${state.pdfBase64}`;
@@ -2040,11 +2036,9 @@ XYZAB5678Q, pass1234, 2024-25`;
     dlPdfBtn.disabled = true;
     dlPdfBtn.textContent = "Generating PDFs...";
 
-    const isDesktop = typeof window.__TAURI_IPC__ !== 'undefined';
-
     const generatePdfBase64 = (item) => {
       return new Promise((resolve, reject) => {
-        if (state.connectionMode === 'demo' || isDesktop) {
+        if (state.connectionMode === 'demo') {
           printReportWindow(item.resultData);
           resolve(null);
         } else {
@@ -2080,8 +2074,8 @@ XYZAB5678Q, pass1234, 2024-25`;
     };
 
     try {
-      if (itemsToDownload.length === 1 || state.connectionMode === 'demo' || isDesktop) {
-        if (state.connectionMode === 'demo' || isDesktop) {
+      if (itemsToDownload.length === 1 || state.connectionMode === 'demo') {
+        if (state.connectionMode === 'demo') {
           itemsToDownload.forEach(item => printReportWindow(item.resultData));
         } else {
           chrome.runtime.sendMessage(
