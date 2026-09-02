@@ -48,25 +48,12 @@
           key: renderData.key
         });
       } else {
-        // Convert base64 to blob and generate a Blob URL to respect the custom filename
-        fetch(`data:application/pdf;base64,${data}`)
-          .then(res => res.blob())
-          .then(blob => {
-            const blobUrl = URL.createObjectURL(blob);
-            chrome.downloads.download({
-              url: blobUrl,
-              filename: filename || "Form26AS.pdf",
-              saveAs: false
-            }, () => {
-              URL.revokeObjectURL(blobUrl);
-              // Notify service worker that download has started/completed so it can close offscreen page
-              chrome.runtime.sendMessage({ action: "DOWNLOAD_COMPLETE" });
-            });
-          })
-          .catch(err => {
-            console.error("Blob URL generation failed:", err);
-            chrome.runtime.sendMessage({ action: "DOWNLOAD_COMPLETE", error: err.message });
-          });
+        // Send message to background script to perform the download in the SW context
+        chrome.runtime.sendMessage({
+          action: "TRIGGER_DOWNLOAD",
+          data: data,
+          filename: filename || "Form26AS.pdf"
+        });
       }
     } else if (action === "ERROR") {
       console.error("Error inside sandbox PDF renderer:", error);

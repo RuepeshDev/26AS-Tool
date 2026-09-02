@@ -71,6 +71,18 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true;
   }
 
+  if (message.action === "TRIGGER_DOWNLOAD") {
+    const dataUrl = `data:application/pdf;base64,${message.data}`;
+    chrome.downloads.download({
+      url: dataUrl,
+      filename: message.filename,
+      saveAs: false
+    }, () => {
+      chrome.offscreen.closeDocument().catch(() => {});
+    });
+    return true;
+  }
+
   if (message.action === "DOWNLOAD_COMPLETE") {
     if (message.error) {
       console.error("Offscreen PDF generation error:", message.error);

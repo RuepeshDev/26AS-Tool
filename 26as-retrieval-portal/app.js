@@ -12,7 +12,6 @@ document.addEventListener('DOMContentLoaded', () => {
     palette: 'blue', // 'blue' | 'emerald' | 'amethyst' | 'orange'
     activeTab: 'single', // 'single' | 'bulk'
     activeModalSource: null, // null | 'single' | rowIndex (number)
-    connectionMode: 'demo', // 'demo' | 'live'
     
     // Single verification state
     singleData: null,
@@ -26,6 +25,8 @@ document.addEventListener('DOMContentLoaded', () => {
     bulkCurrentIndex: 0,
     bulkLogsMap: {}, // index -> array of log objects
     bulkSelectionMode: false,
+    selectedBulkViewIndex: null,
+    activeBulkSession: null, // { pan, password, tracesBase, assesseeName, panStatus, address1, address2 }
 
     // Global Downloader Stats
     stats: {
@@ -74,170 +75,17 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   // ==========================================
-  // MOCK DATA REGISTRY
-  // ==========================================
-  const MOCK_DATA = {
-    // 1. Success Case PAN (Matches PDF Exporter/26as.json structure)
-    'ABCDE1234F': {
-      pan: 'ABCDE1234F',
-      assessmentYear: '2026-27',
-      financialYear: '2025-26',
-      summary: {
-        tds: 12.00,
-        tcs: 0.00,
-        taxPaid: 25000.00,
-        refund: 12500.00,
-        netCredit: 12512.00
-      },
-      partA: [
-        {
-          srNo: 1,
-          tan: 'MUMB25826D',
-          name: 'COLLECTIVE ARTISTS NETWORK INDIA PRIVATE LIMITED',
-          credited: 120.00,
-          deducted: 12.00,
-          deposited: 12.00
-        }
-      ],
-      partB: [
-        {
-          srNo: 1,
-          tan: 'MUMK01323A',
-          name: 'KOTAK MAHINDRA BANK LIMITED',
-          debited: 495.55,
-          collected: 0.00,
-          deposited: 0.00
-        }
-      ],
-      partC: [
-        {
-          srNo: 1,
-          bsr: '0210214',
-          date: '12-May-2025',
-          challan: '02834',
-          taxPaid: 25000.00
-        }
-      ],
-      partD: [
-        {
-          srNo: 1,
-          ay: '2025-26',
-          mode: 'NECS',
-          refund: 12500.00,
-          interest: 430.00,
-          date: '18-Aug-2025'
-        }
-      ]
-    },
-    // 2. Retry Case PAN
-    'RETRY1234B': {
-      pan: 'RETRY1234B',
-      assessmentYear: '2025-26',
-      financialYear: '2024-25',
-      summary: {
-        tds: 34500.00,
-        tcs: 1200.00,
-        taxPaid: 0.00,
-        refund: 0.00,
-        netCredit: 35700.00
-      },
-      partA: [
-        {
-          srNo: 1,
-          tan: 'DELT09987C',
-          name: 'TECH INFRASTRUCTURE SOLUTIONS PVT LTD',
-          credited: 345000.00,
-          deducted: 34500.00,
-          deposited: 34500.00
-        }
-      ],
-      partB: [
-        {
-          srNo: 1,
-          tan: 'MUMM02231A',
-          name: 'MUMBAI METRO AUTO DEALERS',
-          debited: 12000.00,
-          collected: 1200.00,
-          deposited: 1200.00
-        }
-      ],
-      partC: [],
-      partD: []
-    },
-    // Default High-Wealth Fallback PAN
-    'DEFAULT': {
-      pan: 'PANIN8888Z',
-      assessmentYear: '2026-27',
-      financialYear: '2025-26',
-      summary: {
-        tds: 415320.00,
-        tcs: 52400.00,
-        taxPaid: 150000.00,
-        refund: 42800.00,
-        netCredit: 574920.00
-      },
-      partA: [
-        {
-          srNo: 1,
-          tan: 'BLRG01221D',
-          name: 'GOOGLE INDIA PRIVATE LIMITED',
-          credited: 3500000.00,
-          deducted: 350000.00,
-          deposited: 350000.00
-        },
-        {
-          srNo: 2,
-          tan: 'MUMB04432F',
-          name: 'INFOSYS LIMITED',
-          credited: 653200.00,
-          deducted: 65320.00,
-          deposited: 65320.00
-        }
-      ],
-      partB: [
-        {
-          srNo: 1,
-          tan: 'DELM05524A',
-          name: 'MERCEDES BENZ INDIA PVT LTD',
-          debited: 524000.00,
-          collected: 52400.00,
-          deposited: 52400.00
-        }
-      ],
-      partC: [
-        {
-          srNo: 1,
-          bsr: '0002814',
-          date: '15-Sep-2025',
-          challan: '10934',
-          taxPaid: 100000.00
-        },
-        {
-          srNo: 2,
-          bsr: '0002814',
-          date: '15-Dec-2025',
-          challan: '18374',
-          taxPaid: 50000.00
-        }
-      ],
-      partD: [
-        {
-          srNo: 1,
-          ay: '2024-25',
-          mode: 'DIRECT_CREDIT',
-          refund: 40000.00,
-          interest: 2800.00,
-          date: '10-Nov-2024'
-        }
-      ]
-    }
-  };
-
-  // ==========================================
   // DOM ELEMENT SELECTIONS
   // ==========================================
   // Theme Toggle Element
   const themeToggleBtn = document.getElementById('theme-toggle-btn');
+  
+  // Extension Header Controls & Status
+  const extensionStatusBadge = document.getElementById('extension-status-badge');
+  const extensionStatusText = document.getElementById('extension-status-text');
+  const btnCheckExtension = document.getElementById('btn-check-extension');
+  const iconCheckExtension = document.getElementById('icon-check-extension');
+  const extensionHelperGroup = document.getElementById('extension-helper-group');
   
   // Navigation
   const tabSingle = document.getElementById('tab-single');
@@ -253,7 +101,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const eyeIcon = document.getElementById('eye-icon');
   const aySelect = document.getElementById('ay-select');
   const retrieveBtn = document.getElementById('retrieve-btn');
-  const quickTestBadges = document.querySelectorAll('.quick-test-badges .test-badge');
+
 
   // Single tab view states
   const resultsCard = document.getElementById('results-card');
@@ -291,7 +139,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const bulkFileInput = document.getElementById('bulk-file-input');
   const fileInfoLabel = document.getElementById('file-info-label');
   const bulkTextInput = document.getElementById('bulk-text-input');
-  const loadSampleBulkBtn = document.getElementById('load-sample-bulk-btn');
+
   const parseBulkBtn = document.getElementById('parse-bulk-btn');
 
   // Bulk status panel
@@ -311,6 +159,27 @@ document.addEventListener('DOMContentLoaded', () => {
   const bulkQueueTable = document.getElementById('bulk-queue-table');
   const bulkQueueBody = document.getElementById('bulk-queue-body');
 
+  // Bulk Dedicated Result Section Elements
+  const bulkResultCard = document.getElementById('bulk-result-card');
+  const bulkResultDataState = document.getElementById('bulk-result-data-state');
+  const bulkResultPanTitle = document.getElementById('bulk-result-pan-title');
+  const bulkResultMetaTitle = document.getElementById('bulk-result-meta-title');
+  const bulkSumTds = document.getElementById('bulk-sum-tds');
+  const bulkSumTcs = document.getElementById('bulk-sum-tcs');
+  const bulkSumPaid = document.getElementById('bulk-sum-paid');
+  const bulkSumRefund = document.getElementById('bulk-sum-refund');
+  const bulkTablePartABody = document.getElementById('bulk-table-part-a-body');
+  const bulkTablePartBBody = document.getElementById('bulk-table-part-b-body');
+  const bulkTablePartCBody = document.getElementById('bulk-table-part-c-body');
+  const bulkTablePartDBody = document.getElementById('bulk-table-part-d-body');
+  const bulkEmptyPartA = document.getElementById('bulk-empty-part-a');
+  const bulkEmptyPartB = document.getElementById('bulk-empty-part-b');
+  const bulkEmptyPartC = document.getElementById('bulk-empty-part-c');
+  const bulkEmptyPartD = document.getElementById('bulk-empty-part-d');
+  const bulkDownloadJsonBtn = document.getElementById('bulk-download-json');
+  const bulkDownloadPdfBtn = document.getElementById('bulk-download-pdf');
+  const bulkResultCloseBtn = document.getElementById('bulk-result-close-btn');
+
   // Modal Terminal elements
   const logModal = document.getElementById('log-modal');
   const modalTerminalTitle = document.getElementById('modal-terminal-title');
@@ -323,16 +192,59 @@ document.addEventListener('DOMContentLoaded', () => {
   const modalCancelBtn = document.getElementById('modal-cancel-btn');
 
   // ==========================================
+  // TOAST NOTIFICATIONS
+  // ==========================================
+  function showToast(title, description) {
+    const container = document.getElementById('toast-container');
+    if (!container) return;
+    
+    const toast = document.createElement('div');
+    toast.className = 'toast-message';
+    
+    toast.innerHTML = `
+      <div class="toast-icon">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="20" height="20">
+          <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
+          <line x1="12" y1="9" x2="12" y2="13"></line>
+          <line x1="12" y1="17" x2="12.01" y2="17"></line>
+        </svg>
+      </div>
+      <div class="toast-content">
+        <div class="toast-title">${title}</div>
+        <div class="toast-description">
+          ${description}
+          <br>
+          <a href="https://drive.google.com/drive/folders/10cir9lXk3I1W7rQluqE8gBYDXbNeTKY_?usp=sharing" target="_blank" class="toast-action-link" style="display: inline-flex; align-items: center; gap: 4px; margin-top: 8px; color: var(--color-warning); font-weight: 700; text-decoration: none; font-size: 0.75rem;">
+            Download Helper ZIP ➔
+          </a>
+        </div>
+      </div>
+      <button class="toast-close-btn" aria-label="Close message">&times;</button>
+    `;
+    
+    container.appendChild(toast);
+    
+    // Bind close button click
+    const closeBtn = toast.querySelector('.toast-close-btn');
+    if (closeBtn) {
+      closeBtn.addEventListener('click', () => {
+        toast.classList.add('toast-exit');
+        toast.addEventListener('animationend', () => {
+          toast.remove();
+        });
+      });
+    }
+  }
+
+  // ==========================================
   // PREFERENCE LOADING (THEME)
   // ==========================================
   
   function initTheme() {
     // Load from localStorage (default to dark)
     const savedTheme = localStorage.getItem('traces-theme') || 'dark';
-    const savedConnMode = localStorage.getItem('traces-conn-mode') || 'live'; // default to live for deployed web
-    
     setThemeMode(savedTheme);
-    setConnectionMode(savedConnMode);
+    checkExtension();
   }
 
   function setThemeMode(mode) {
@@ -364,27 +276,46 @@ document.addEventListener('DOMContentLoaded', () => {
   const EXTENSION_ID = 'bdbfbimncembaafobijknhndklpidkki';
 
   function updateDownloadStatus() {
-    // In Demo mode, we allow PDF generation natively (using the web print window)
-    if (state.connectionMode === 'demo') {
-      downloadPdfSingle.disabled = false;
-      if (extensionWarning) extensionWarning.classList.add('hidden');
-      return;
-    }
-    
-    // In Live mode on the web, verify the companion extension is active
+    // Verify the companion extension is active
     if (state.extensionInstalled) {
       downloadPdfSingle.disabled = false;
       if (extensionWarning) extensionWarning.classList.add('hidden');
+      if (extensionStatusBadge) {
+        extensionStatusBadge.className = 'connection-badge online';
+      }
+      if (extensionStatusText) {
+        extensionStatusText.textContent = 'Extension: Connected';
+      }
+      if (btnCheckExtension) {
+        btnCheckExtension.style.display = 'none';
+      }
+      if (extensionHelperGroup) {
+        extensionHelperGroup.style.display = 'none';
+      }
     } else {
       downloadPdfSingle.disabled = true;
       if (extensionWarning) extensionWarning.classList.remove('hidden');
+      if (extensionStatusBadge) {
+        extensionStatusBadge.className = 'connection-badge offline';
+      }
+      if (extensionStatusText) {
+        extensionStatusText.textContent = 'Extension: Offline';
+      }
+      if (btnCheckExtension) {
+        btnCheckExtension.style.display = 'inline-flex';
+      }
+      if (extensionHelperGroup) {
+        extensionHelperGroup.style.display = 'inline-flex';
+      }
     }
+    updateBulkActionsUI();
   }
 
-  function checkExtension() {
+  function checkExtension(callback) {
     if (!window.chrome || !chrome.runtime || !chrome.runtime.sendMessage) {
       state.extensionInstalled = false;
       updateDownloadStatus();
+      if (typeof callback === 'function') callback(false);
       return;
     }
 
@@ -395,22 +326,35 @@ document.addEventListener('DOMContentLoaded', () => {
         state.extensionInstalled = true;
       }
       updateDownloadStatus();
+      if (typeof callback === 'function') callback(state.extensionInstalled);
     });
   }
 
-  function setConnectionMode(mode) {
-    state.connectionMode = mode;
-    localStorage.setItem('traces-conn-mode', mode);
-    
-    connDemoBtn.classList.remove('active');
-    connLiveBtn.classList.remove('active');
-    
-    if (mode === 'live') {
-      connLiveBtn.classList.add('active');
-    } else {
-      connDemoBtn.classList.add('active');
-    }
-    checkExtension();
+  // Bind Manual Check Connection Button
+  if (btnCheckExtension) {
+    btnCheckExtension.addEventListener('click', () => {
+      if (iconCheckExtension) iconCheckExtension.classList.add('spinning');
+      btnCheckExtension.disabled = true;
+
+      checkExtension((isConnected) => {
+        setTimeout(() => {
+          if (iconCheckExtension) iconCheckExtension.classList.remove('spinning');
+          btnCheckExtension.disabled = false;
+
+          if (isConnected) {
+            showToast(
+              "Extension Connected",
+              "PDF Downloader Helper connected successfully. You can now generate and export Form 26AS PDFs."
+            );
+          } else {
+            showToast(
+              "Extension Not Detected",
+              "Please make sure Developer Mode is enabled in your browser extensions and the folder is loaded unpacked."
+            );
+          }
+        }, 400);
+      });
+    });
   }
 
   // Bind theme toggle button
@@ -484,24 +428,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
-  // Bind scenario click test buttons
-  quickTestBadges.forEach(badge => {
-    badge.addEventListener('click', () => {
-      const pan = badge.getAttribute('data-pan');
-      const pass = badge.getAttribute('data-pass');
-      
-      panInput.value = pan;
-      passwordInput.value = pass;
-      
-      // Trigger validation updates manually (badge removed)
-      // Let's set AY to 2026-27 for success case, or others
-      if (pan === 'RETRY1234B') {
-        aySelect.value = '2025-26';
-      } else {
-        aySelect.value = '2026-27';
-      }
-    });
-  });
+
 
   // ==========================================
   // TERMINAL LOG STREAMING ENGINE
@@ -628,129 +555,283 @@ document.addEventListener('DOMContentLoaded', () => {
     const trackLog = (char, style, msg) => {
       state.singleLogs.push({ char, style, msg });
     };
+    
+    const stepConn = appendLogStep(`Establishing connection`);
+    trackLog('➜', 'info', `Establishing connection`);
 
-    if (state.connectionMode === 'live') {
-      const stepConn = appendLogStep(`Establishing connection`);
-      trackLog('➜', 'info', `Establishing connection`);
-
-      // 1. Establish session connection
-      let data;
-      try {
-        const response = await fetch(`${API_BASE}/api/connect`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ pan: pan })
-        });
-        
-        if (state.isSingleCancelled) return;
-
-        if (!response.ok) {
-          throw new Error(`Backend returned HTTP ${response.status}`);
-        }
-        
-        data = await response.json();
-      } catch (err) {
-        if (state.isSingleCancelled) return;
-        markLogStepFailure(stepConn, `Establishing connection: Connection to backend failed.`);
-        trackLog('✖', 'error', `Connection to backend failed.`);
-        appendLogLine('✖', 'error', 'If you think this is a unusual error, please report this issue to the developers from the settings menu.');
-        trackLog('✖', 'error', 'If you think this is a unusual error, please report this issue to the developers from the settings menu.');
-        completeSingleVerification(false, 'failed', 'Backend server unreachable', startTime);
-        return;
-      }
-
-      if (data.status === 'failed') {
-        markLogStepFailure(stepConn, `Establishing connection: ${data.error}`);
-        trackLog('✖', 'error', `Establishing connection: ${data.error}`);
-        appendLogLine('✖', 'error', 'If you think this is a unusual error, please report this issue to the developers from the settings menu.');
-        trackLog('✖', 'error', 'If you think this is a unusual error, please report this issue to the developers from the settings menu.');
-        completeSingleVerification(false, 'failed', 'Connection Failed', startTime);
-        return;
-      }
-
-      // Connection succeeded
-      markLogStepSuccess(stepConn);
-      trackLog('✔', 'success', `Establishing connection`);
-
-      // 2. Perform User ID verification
-      const stepUser = appendLogStep(`User ID verification`);
-      trackLog('➜', 'info', `User ID verification`);
-
-      try {
-        const response = await fetch(`${API_BASE}/api/verify-user`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ pan: pan })
-        });
-        
-        if (state.isSingleCancelled) return;
-
-        if (!response.ok) {
-          throw new Error(`Backend returned HTTP ${response.status}`);
-        }
-        
-        data = await response.json();
-      } catch (err) {
-        if (state.isSingleCancelled) return;
-        markLogStepFailure(stepUser, `User ID verification: Verification request failed.`);
-        trackLog('✖', 'error', `Verification request failed.`);
-        appendLogLine('✖', 'error', 'If you think this is a unusual error, please report this issue to the developers from the settings menu.');
-        trackLog('✖', 'error', 'If you think this is a unusual error, please report this issue to the developers from the settings menu.');
-        completeSingleVerification(false, 'failed', 'Verification Request Failed', startTime);
-        return;
-      }
-
-      if (data.status === 'failed') {
-        markLogStepFailure(stepUser, `User ID verification: ${data.error}`);
-        trackLog('✖', 'error', `User ID verification: ${data.error}`);
-        appendLogLine('✖', 'error', 'If you think this is a unusual error, please report this issue to the developers from the settings menu.');
-        trackLog('✖', 'error', 'If you think this is a unusual error, please report this issue to the developers from the settings menu.');
-        completeSingleVerification(false, 'failed', 'User ID Verification Failed', startTime);
-        return;
-      }
-
-      // User ID verification succeeded
-      markLogStepSuccess(stepUser);
-      trackLog('✔', 'success', `User ID verification`);
+    // 1. Establish session connection
+    let data;
+    try {
+      const response = await fetch(`${API_BASE}/api/connect`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ pan: pan })
+      });
       
-      const reqId = data.reqId;
-      const secAccssMsg = data.secAccssMsg;
-      const entityType = data.entityType || 'PAN';
+      if (state.isSingleCancelled) return;
 
-      // 3. Perform Password Login
-      const stepLogin = appendLogStep(`Logging in`);
-      trackLog('➜', 'info', `Logging in`);
+      if (!response.ok) {
+        throw new Error(`Backend returned HTTP ${response.status}`);
+      }
+      
+      data = await response.json();
+    } catch (err) {
+      if (state.isSingleCancelled) return;
+      markLogStepFailure(stepConn, `Establishing connection: Connection to backend failed.`);
+      trackLog('✖', 'error', `Connection to backend failed.`);
+      appendLogLine('✖', 'error', 'If you think this is a unusual error, please report this issue to the developers.');
+      trackLog('✖', 'error', 'If you think this is a unusual error, please report this issue to the developers.');
+      completeSingleVerification(false, 'failed', 'Backend server unreachable', startTime);
+      return;
+    }
 
+    if (data.status === 'failed') {
+      markLogStepFailure(stepConn, `Establishing connection: ${data.error}`);
+      trackLog('✖', 'error', `Establishing connection: ${data.error}`);
+      appendLogLine('✖', 'error', 'If you think this is a unusual error, please report this issue to the developers.');
+      trackLog('✖', 'error', 'If you think this is a unusual error, please report this issue to the developers.');
+      completeSingleVerification(false, 'failed', 'Connection Failed', startTime);
+      return;
+    }
+
+    // Connection succeeded
+    markLogStepSuccess(stepConn);
+    trackLog('✔', 'success', `Establishing connection`);
+
+    // 2. Perform User ID verification
+    const stepUser = appendLogStep(`User ID verification`);
+    trackLog('➜', 'info', `User ID verification`);
+
+    try {
+      const response = await fetch(`${API_BASE}/api/verify-user`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ pan: pan })
+      });
+      
+      if (state.isSingleCancelled) return;
+
+      if (!response.ok) {
+        throw new Error(`Backend returned HTTP ${response.status}`);
+      }
+      
+      data = await response.json();
+    } catch (err) {
+      if (state.isSingleCancelled) return;
+      markLogStepFailure(stepUser, `User ID verification: Verification request failed.`);
+      trackLog('✖', 'error', `Verification request failed.`);
+      appendLogLine('✖', 'error', 'If you think this is a unusual error, please report this issue to the developers.');
+      trackLog('✖', 'error', 'If you think this is a unusual error, please report this issue to the developers.');
+      completeSingleVerification(false, 'failed', 'Verification Request Failed', startTime);
+      return;
+    }
+
+    if (data.status === 'failed') {
+      markLogStepFailure(stepUser, `User ID verification: ${data.error}`);
+      trackLog('✖', 'error', `User ID verification: ${data.error}`);
+      appendLogLine('✖', 'error', 'If you think this is a unusual error, please report this issue to the developers.');
+      trackLog('✖', 'error', 'If you think this is a unusual error, please report this issue to the developers.');
+      completeSingleVerification(false, 'failed', 'User ID Verification Failed', startTime);
+      return;
+    }
+
+    // User ID verification succeeded
+    markLogStepSuccess(stepUser);
+    trackLog('✔', 'success', `User ID verification`);
+    
+    const reqId = data.reqId;
+    const secAccssMsg = data.secAccssMsg;
+    const entityType = data.entityType || 'PAN';
+
+    // 3. Perform Password Login
+    const stepLogin = appendLogStep(`Logging in`);
+    trackLog('➜', 'info', `Logging in`);
+
+    try {
+      const response = await fetch(`${API_BASE}/api/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ pan: pan, password: pass, reqId: reqId, secAccssMsg: secAccssMsg, entityType: entityType })
+      });
+      
+      if (state.isSingleCancelled) return;
+
+      if (!response.ok) {
+        throw new Error(`Backend returned HTTP ${response.status}`);
+      }
+      
+      data = await response.json();
+    } catch (err) {
+      if (state.isSingleCancelled) return;
+      markLogStepFailure(stepLogin, `Logging in: Login request failed.`);
+      trackLog('✖', 'error', `Login request failed.`);
+      appendLogLine('✖', 'error', 'If you think this is a unusual error, please report this issue to the developers.');
+      trackLog('✖', 'error', 'If you think this is a unusual error, please report this issue to the developers.');
+      completeSingleVerification(false, 'failed', 'Login Request Failed', startTime);
+      return;
+    }
+
+    if (data.status === 'success') {
+      markLogStepSuccess(stepLogin);
+      trackLog('✔', 'success', `Logging in`);
+      
+      state.liveReqId = data.reqId;
+      state.liveSecAccssMsg = data.secAccssMsg;
+      
+      // Phase 5: Redirecting to Traces Portal
+      const stepRedirect = appendLogStep(`Redirecting to Traces Portal`);
+      trackLog('➜', 'info', `Redirecting to Traces Portal`);
+      
       try {
-        const response = await fetch(`${API_BASE}/api/login`, {
+        const response = await fetch(`${API_BASE}/api/redirect-to-traces`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ pan: pan, password: pass, reqId: reqId, secAccssMsg: secAccssMsg, entityType: entityType })
+          body: JSON.stringify({ pan: pan, ay: ay })
         });
         
         if (state.isSingleCancelled) return;
-
-        if (!response.ok) {
-          throw new Error(`Backend returned HTTP ${response.status}`);
-        }
-        
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
         data = await response.json();
       } catch (err) {
         if (state.isSingleCancelled) return;
-        markLogStepFailure(stepLogin, `Logging in: Login request failed.`);
-        trackLog('✖', 'error', `Login request failed.`);
-        appendLogLine('✖', 'error', 'If you think this is a unusual error, please report this issue to the developers from the settings menu.');
-        trackLog('✖', 'error', 'If you think this is a unusual error, please report this issue to the developers from the settings menu.');
-        completeSingleVerification(false, 'failed', 'Login Request Failed', startTime);
+        markLogStepFailure(stepRedirect, `Redirecting to Traces Portal: Redirect request failed.`);
+        trackLog('✖', 'error', `Redirecting to Traces Portal failed.`);
+        appendLogLine('✖', 'error', 'If you think this is a unusual error, please report this issue to the developers.');
+        trackLog('✖', 'error', 'If you think this is a unusual error, please report this issue to the developers.');
+        completeSingleVerification(false, 'failed', 'Redirect Request Failed', startTime);
         return;
       }
-
+      
       if (data.status === 'success') {
-        markLogStepSuccess(stepLogin);
-        trackLog('✔', 'success', `Logging in`);
+        markLogStepSuccess(stepRedirect);
+        trackLog('✔', 'success', `Redirecting to Traces Portal`);
         
-        state.liveReqId = data.reqId;
-        state.liveSecAccssMsg = data.secAccssMsg;
+        state.liveTracesBase = data.tracesBase;
+        
+        // Phase 6: Downloading 26AS Data
+        const stepDownload = appendLogStep(`Downloading 26AS data`);
+        trackLog('➜', 'info', `Downloading 26AS data`);
+        
+        try {
+          const response = await fetch(`${API_BASE}/api/download-26as`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ pan: pan, ay: ay, tracesBase: state.liveTracesBase })
+          });
+          
+          if (state.isSingleCancelled) return;
+          if (!response.ok) throw new Error(`HTTP ${response.status}`);
+          data = await response.json();
+        } catch (err) {
+          if (state.isSingleCancelled) return;
+          markLogStepFailure(stepDownload, `Downloading 26AS data: Download request failed.`);
+          trackLog('✖', 'error', `Downloading 26AS data failed.`);
+          appendLogLine('✖', 'error', 'If you think this is a unusual error, please report this issue to the developers.');
+          trackLog('✖', 'error', 'If you think this is a unusual error, please report this issue to the developers.');
+          completeSingleVerification(false, 'failed', 'Download Request Failed', startTime);
+          return;
+        }
+        
+        if (data.status === 'success') {
+          markLogStepSuccess(stepDownload);
+          trackLog('✔', 'success', `Downloading 26AS data`);
+          
+          // Save data
+          state.singleData = translateTracesData(data.taxData, pan, ay);
+          state.singleData.assesseeName = data.assesseeName;
+          state.singleData.panStatus = data.panStatus;
+          state.singleData.address1 = data.address1;
+          state.singleData.address2 = data.address2;
+          state.singleData.ay = data.ay;
+          state.singleData.fy = data.fy;
+          state.pdfBase64 = data.pdfBase64;
+          state.rawTaxData = data.taxData; // kept raw for TAN drill-down modal
+          
+          // Next phase is Phase 7: Logging out
+          const stepLogout = appendLogStep(`Logging out`);
+          trackLog('➜', 'info', `Logging out`);
+          
+          try {
+            const response = await fetch(`${API_BASE}/api/logout`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ pan: pan })
+            });
+            if (state.isSingleCancelled) return;
+            if (!response.ok) throw new Error(`HTTP ${response.status}`);
+            data = await response.json();
+          } catch (err) {
+            if (state.isSingleCancelled) return;
+            markLogStepFailure(stepLogout, `Logging out: Logout request failed.`);
+            trackLog('✖', 'error', `Logging out failed.`);
+            appendLogLine('✖', 'error', 'If you think this is a unusual error, please report this issue to the developers.');
+            trackLog('✖', 'error', 'If you think this is a unusual error, please report this issue to the developers.');
+            completeSingleVerification(false, 'failed', 'Logout Request Failed', startTime);
+            return;
+          }
+          
+          if (data.status === 'success') {
+            markLogStepSuccess(stepLogout);
+            trackLog('✔', 'success', `Logging out`);
+            completeSingleVerification(true, 'success', 'Retrieved successfully', startTime);
+          } else {
+            markLogStepFailure(stepLogout, `Logging out: ${data.error}`);
+            trackLog('✖', 'error', `Logging out: ${data.error}`);
+            appendLogLine('✖', 'error', 'If you think this is a unusual error, please report this issue to the developers.');
+            trackLog('✖', 'error', 'If you think this is a unusual error, please report this issue to the developers.');
+            completeSingleVerification(false, 'failed', 'Logging Out Failed', startTime);
+          }
+        } else {
+          markLogStepFailure(stepDownload, `Downloading 26AS data: ${data.error}`);
+          trackLog('✖', 'error', `Downloading 26AS data: ${data.error}`);
+          
+          appendLogLine('✖', 'error', 'If you think this is a unusual error, please report this issue to the developers.');
+          trackLog('✖', 'error', 'If you think this is a unusual error, please report this issue to the developers.');
+          
+          completeSingleVerification(false, 'failed', 'Downloading 26AS Data Failed', startTime);
+        }
+      } else {
+        markLogStepFailure(stepRedirect, `Redirecting to Traces Portal: ${data.error}`);
+        trackLog('✖', 'error', `Redirecting to Traces Portal: ${data.error}`);
+        
+        appendLogLine('✖', 'error', 'If you think this is a unusual error, please report this issue to the developers.');
+        trackLog('✖', 'error', 'If you think this is a unusual error, please report this issue to the developers.');
+        
+        completeSingleVerification(false, 'failed', 'Redirect to Traces Failed', startTime);
+      }
+    } else if (data.status === 'dual_login') {
+      markLogStepSuccess(stepLogin);
+      trackLog('✔', 'success', `Logging in`);
+      
+      const originalResponse = data.originalResponse;
+      
+      // Phase 4: Handling Dual Login
+      const stepDual = appendLogStep(`Handling dual login`);
+      trackLog('➜', 'info', `Handling dual login`);
+      
+      try {
+        const response = await fetch(`${API_BASE}/api/handle-dual-login`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ pan: pan, originalResponse: originalResponse })
+        });
+        
+        if (state.isSingleCancelled) return;
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        data = await response.json();
+      } catch (err) {
+        if (state.isSingleCancelled) return;
+        markLogStepFailure(stepDual, `Handling dual login: Override request failed.`);
+        trackLog('✖', 'error', `Handling dual login failed.`);
+        appendLogLine('✖', 'error', 'If you think this is a unusual error, please report this issue to the developers.');
+        trackLog('✖', 'error', 'If you think this is a unusual error, please report this issue to the developers.');
+        completeSingleVerification(false, 'failed', 'Dual Login Request Failed', startTime);
+        return;
+      }
+      
+      if (data.status === 'success') {
+        markLogStepSuccess(stepDual);
+        trackLog('✔', 'success', `Handling dual login`);
         
         // Phase 5: Redirecting to Traces Portal
         const stepRedirect = appendLogStep(`Redirecting to Traces Portal`);
@@ -770,8 +851,8 @@ document.addEventListener('DOMContentLoaded', () => {
           if (state.isSingleCancelled) return;
           markLogStepFailure(stepRedirect, `Redirecting to Traces Portal: Redirect request failed.`);
           trackLog('✖', 'error', `Redirecting to Traces Portal failed.`);
-          appendLogLine('✖', 'error', 'If you think this is a unusual error, please report this issue to the developers from the settings menu.');
-          trackLog('✖', 'error', 'If you think this is a unusual error, please report this issue to the developers from the settings menu.');
+          appendLogLine('✖', 'error', 'If you think this is a unusual error, please report this issue to the developers.');
+          trackLog('✖', 'error', 'If you think this is a unusual error, please report this issue to the developers.');
           completeSingleVerification(false, 'failed', 'Redirect Request Failed', startTime);
           return;
         }
@@ -800,8 +881,8 @@ document.addEventListener('DOMContentLoaded', () => {
             if (state.isSingleCancelled) return;
             markLogStepFailure(stepDownload, `Downloading 26AS data: Download request failed.`);
             trackLog('✖', 'error', `Downloading 26AS data failed.`);
-            appendLogLine('✖', 'error', 'If you think this is a unusual error, please report this issue to the developers from the settings menu.');
-            trackLog('✖', 'error', 'If you think this is a unusual error, please report this issue to the developers from the settings menu.');
+            appendLogLine('✖', 'error', 'If you think this is a unusual error, please report this issue to the developers.');
+            trackLog('✖', 'error', 'If you think this is a unusual error, please report this issue to the developers.');
             completeSingleVerification(false, 'failed', 'Download Request Failed', startTime);
             return;
           }
@@ -816,8 +897,8 @@ document.addEventListener('DOMContentLoaded', () => {
             state.singleData.panStatus = data.panStatus;
             state.singleData.address1 = data.address1;
             state.singleData.address2 = data.address2;
-            state.singleData.ay = data.address3;
-            state.singleData.address4 = data.address4;
+            state.singleData.ay = data.ay;
+            state.singleData.fy = data.fy;
             state.pdfBase64 = data.pdfBase64;
             state.rawTaxData = data.taxData; // kept raw for TAN drill-down modal
             
@@ -838,8 +919,8 @@ document.addEventListener('DOMContentLoaded', () => {
               if (state.isSingleCancelled) return;
               markLogStepFailure(stepLogout, `Logging out: Logout request failed.`);
               trackLog('✖', 'error', `Logging out failed.`);
-              appendLogLine('✖', 'error', 'If you think this is a unusual error, please report this issue to the developers from the settings menu.');
-              trackLog('✖', 'error', 'If you think this is a unusual error, please report this issue to the developers from the settings menu.');
+              appendLogLine('✖', 'error', 'If you think this is a unusual error, please report this issue to the developers.');
+              trackLog('✖', 'error', 'If you think this is a unusual error, please report this issue to the developers.');
               completeSingleVerification(false, 'failed', 'Logout Request Failed', startTime);
               return;
             }
@@ -851,16 +932,16 @@ document.addEventListener('DOMContentLoaded', () => {
             } else {
               markLogStepFailure(stepLogout, `Logging out: ${data.error}`);
               trackLog('✖', 'error', `Logging out: ${data.error}`);
-              appendLogLine('✖', 'error', 'If you think this is a unusual error, please report this issue to the developers from the settings menu.');
-              trackLog('✖', 'error', 'If you think this is a unusual error, please report this issue to the developers from the settings menu.');
+              appendLogLine('✖', 'error', 'If you think this is a unusual error, please report this issue to the developers.');
+              trackLog('✖', 'error', 'If you think this is a unusual error, please report this issue to the developers.');
               completeSingleVerification(false, 'failed', 'Logging Out Failed', startTime);
             }
           } else {
             markLogStepFailure(stepDownload, `Downloading 26AS data: ${data.error}`);
             trackLog('✖', 'error', `Downloading 26AS data: ${data.error}`);
             
-            appendLogLine('✖', 'error', 'If you think this is a unusual error, please report this issue to the developers from the settings menu.');
-            trackLog('✖', 'error', 'If you think this is a unusual error, please report this issue to the developers from the settings menu.');
+            appendLogLine('✖', 'error', 'If you think this is a unusual error, please report this issue to the developers.');
+            trackLog('✖', 'error', 'If you think this is a unusual error, please report this issue to the developers.');
             
             completeSingleVerification(false, 'failed', 'Downloading 26AS Data Failed', startTime);
           }
@@ -868,279 +949,29 @@ document.addEventListener('DOMContentLoaded', () => {
           markLogStepFailure(stepRedirect, `Redirecting to Traces Portal: ${data.error}`);
           trackLog('✖', 'error', `Redirecting to Traces Portal: ${data.error}`);
           
-          appendLogLine('✖', 'error', 'If you think this is a unusual error, please report this issue to the developers from the settings menu.');
-          trackLog('✖', 'error', 'If you think this is a unusual error, please report this issue to the developers from the settings menu.');
+          appendLogLine('✖', 'error', 'If you think this is a unusual error, please report this issue to the developers.');
+          trackLog('✖', 'error', 'If you think this is a unusual error, please report this issue to the developers.');
           
           completeSingleVerification(false, 'failed', 'Redirect to Traces Failed', startTime);
         }
-      } else if (data.status === 'dual_login') {
-        markLogStepSuccess(stepLogin);
-        trackLog('✔', 'success', `Logging in`);
-        
-        const originalResponse = data.originalResponse;
-        
-        // Phase 4: Handling Dual Login
-        const stepDual = appendLogStep(`Handling dual login`);
-        trackLog('➜', 'info', `Handling dual login`);
-        
-        try {
-          const response = await fetch(`${API_BASE}/api/handle-dual-login`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ pan: pan, originalResponse: originalResponse })
-          });
-          
-          if (state.isSingleCancelled) return;
-          if (!response.ok) throw new Error(`HTTP ${response.status}`);
-          data = await response.json();
-        } catch (err) {
-          if (state.isSingleCancelled) return;
-          markLogStepFailure(stepDual, `Handling dual login: Override request failed.`);
-          trackLog('✖', 'error', `Handling dual login failed.`);
-          appendLogLine('✖', 'error', 'If you think this is a unusual error, please report this issue to the developers from the settings menu.');
-          trackLog('✖', 'error', 'If you think this is a unusual error, please report this issue to the developers from the settings menu.');
-          completeSingleVerification(false, 'failed', 'Dual Login Request Failed', startTime);
-          return;
-        }
-        
-        if (data.status === 'success') {
-          markLogStepSuccess(stepDual);
-          trackLog('✔', 'success', `Handling dual login`);
-          
-          // Phase 5: Redirecting to Traces Portal
-          const stepRedirect = appendLogStep(`Redirecting to Traces Portal`);
-          trackLog('➜', 'info', `Redirecting to Traces Portal`);
-          
-          try {
-            const response = await fetch(`${API_BASE}/api/redirect-to-traces`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ pan: pan, ay: ay })
-            });
-            
-            if (state.isSingleCancelled) return;
-            if (!response.ok) throw new Error(`HTTP ${response.status}`);
-            data = await response.json();
-          } catch (err) {
-            if (state.isSingleCancelled) return;
-            markLogStepFailure(stepRedirect, `Redirecting to Traces Portal: Redirect request failed.`);
-            trackLog('✖', 'error', `Redirecting to Traces Portal failed.`);
-            appendLogLine('✖', 'error', 'If you think this is a unusual error, please report this issue to the developers from the settings menu.');
-            trackLog('✖', 'error', 'If you think this is a unusual error, please report this issue to the developers from the settings menu.');
-            completeSingleVerification(false, 'failed', 'Redirect Request Failed', startTime);
-            return;
-          }
-          
-          if (data.status === 'success') {
-            markLogStepSuccess(stepRedirect);
-            trackLog('✔', 'success', `Redirecting to Traces Portal`);
-            
-            state.liveTracesBase = data.tracesBase;
-            
-            // Phase 6: Downloading 26AS Data
-            const stepDownload = appendLogStep(`Downloading 26AS data`);
-            trackLog('➜', 'info', `Downloading 26AS data`);
-            
-            try {
-              const response = await fetch(`${API_BASE}/api/download-26as`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ pan: pan, ay: ay, tracesBase: state.liveTracesBase })
-              });
-              
-              if (state.isSingleCancelled) return;
-              if (!response.ok) throw new Error(`HTTP ${response.status}`);
-              data = await response.json();
-            } catch (err) {
-              if (state.isSingleCancelled) return;
-              markLogStepFailure(stepDownload, `Downloading 26AS data: Download request failed.`);
-              trackLog('✖', 'error', `Downloading 26AS data failed.`);
-              appendLogLine('✖', 'error', 'If you think this is a unusual error, please report this issue to the developers from the settings menu.');
-              trackLog('✖', 'error', 'If you think this is a unusual error, please report this issue to the developers from the settings menu.');
-              completeSingleVerification(false, 'failed', 'Download Request Failed', startTime);
-              return;
-            }
-            
-            if (data.status === 'success') {
-              markLogStepSuccess(stepDownload);
-              trackLog('✔', 'success', `Downloading 26AS data`);
-              
-              // Save data
-              state.singleData = translateTracesData(data.taxData, pan, ay);
-              state.singleData.assesseeName = data.assesseeName;
-              state.singleData.panStatus = data.panStatus;
-              state.singleData.address1 = data.address1;
-              state.singleData.address2 = data.address2;
-              state.singleData.ay = data.ay;
-              state.singleData.fy = data.fy;
-              state.pdfBase64 = data.pdfBase64;
-              state.rawTaxData = data.taxData; // kept raw for TAN drill-down modal
-              
-              // Next phase is Phase 7: Logging out
-              const stepLogout = appendLogStep(`Logging out`);
-              trackLog('➜', 'info', `Logging out`);
-              
-              try {
-                const response = await fetch(`${API_BASE}/api/logout`, {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({ pan: pan })
-                });
-                if (state.isSingleCancelled) return;
-                if (!response.ok) throw new Error(`HTTP ${response.status}`);
-                data = await response.json();
-              } catch (err) {
-                if (state.isSingleCancelled) return;
-                markLogStepFailure(stepLogout, `Logging out: Logout request failed.`);
-                trackLog('✖', 'error', `Logging out failed.`);
-                appendLogLine('✖', 'error', 'If you think this is a unusual error, please report this issue to the developers from the settings menu.');
-                trackLog('✖', 'error', 'If you think this is a unusual error, please report this issue to the developers from the settings menu.');
-                completeSingleVerification(false, 'failed', 'Logout Request Failed', startTime);
-                return;
-              }
-              
-              if (data.status === 'success') {
-                markLogStepSuccess(stepLogout);
-                trackLog('✔', 'success', `Logging out`);
-                completeSingleVerification(true, 'success', 'Retrieved successfully', startTime);
-              } else {
-                markLogStepFailure(stepLogout, `Logging out: ${data.error}`);
-                trackLog('✖', 'error', `Logging out: ${data.error}`);
-                appendLogLine('✖', 'error', 'If you think this is a unusual error, please report this issue to the developers from the settings menu.');
-                trackLog('✖', 'error', 'If you think this is a unusual error, please report this issue to the developers from the settings menu.');
-                completeSingleVerification(false, 'failed', 'Logging Out Failed', startTime);
-              }
-            } else {
-              markLogStepFailure(stepDownload, `Downloading 26AS data: ${data.error}`);
-              trackLog('✖', 'error', `Downloading 26AS data: ${data.error}`);
-              
-              appendLogLine('✖', 'error', 'If you think this is a unusual error, please report this issue to the developers from the settings menu.');
-              trackLog('✖', 'error', 'If you think this is a unusual error, please report this issue to the developers from the settings menu.');
-              
-              completeSingleVerification(false, 'failed', 'Downloading 26AS Data Failed', startTime);
-            }
-          } else {
-            markLogStepFailure(stepRedirect, `Redirecting to Traces Portal: ${data.error}`);
-            trackLog('✖', 'error', `Redirecting to Traces Portal: ${data.error}`);
-            
-            appendLogLine('✖', 'error', 'If you think this is a unusual error, please report this issue to the developers from the settings menu.');
-            trackLog('✖', 'error', 'If you think this is a unusual error, please report this issue to the developers from the settings menu.');
-            
-            completeSingleVerification(false, 'failed', 'Redirect to Traces Failed', startTime);
-          }
-        } else {
-          markLogStepFailure(stepDual, `Handling dual login: ${data.error}`);
-          trackLog('✖', 'error', `Handling dual login: ${data.error}`);
-          
-          appendLogLine('✖', 'error', 'If you think this is a unusual error, please report this issue to the developers from the settings menu.');
-          trackLog('✖', 'error', 'If you think this is a unusual error, please report this issue to the developers from the settings menu.');
-          
-          completeSingleVerification(false, 'failed', 'Dual Login Override Failed', startTime);
-        }
       } else {
-        markLogStepFailure(stepLogin, `Logging in: ${data.error}`);
-        trackLog('✖', 'error', `Logging in: ${data.error}`);
+        markLogStepFailure(stepDual, `Handling dual login: ${data.error}`);
+        trackLog('✖', 'error', `Handling dual login: ${data.error}`);
         
-        appendLogLine('✖', 'error', 'If you think this is a unusual error, please report this issue to the developers from the settings menu.');
-        trackLog('✖', 'error', 'If you think this is a unusual error, please report this issue to the developers from the settings menu.');
+        appendLogLine('✖', 'error', 'If you think this is a unusual error, please report this issue to the developers.');
+        trackLog('✖', 'error', 'If you think this is a unusual error, please report this issue to the developers.');
         
-        completeSingleVerification(false, 'failed', 'Logging In Failed', startTime);
+        completeSingleVerification(false, 'failed', 'Dual Login Override Failed', startTime);
       }
-      return;
-    }
-
-    // Phase 1: Establishing Connection
-    const stepConn = appendLogStep(`Establishing connection`);
-    trackLog('➜', 'info', `Establishing connection`);
-    await delay(3200);
-    if (state.isSingleCancelled) return;
-    markLogStepSuccess(stepConn);
-    trackLog('✔', 'success', `Establishing connection`);
-
-    // Phase 2: User ID Verification
-    const stepUser = appendLogStep(`User ID verification`);
-    trackLog('➜', 'info', `User ID verification`);
-    await delay(6000);
-    if (state.isSingleCancelled) return;
-    markLogStepSuccess(stepUser);
-    trackLog('✔', 'success', `User ID verification`);
-
-    // Phase 3: Logging In
-    const stepLogin = appendLogStep(`Logging in`);
-    trackLog('➜', 'info', `Logging in`);
-    await delay(1200);
-    if (state.isSingleCancelled) return;
-
-    // Phase 4: Scenario Checks & Handling Dual Login
-    if (pan === 'ERROR1234A') {
-      markLogStepFailure(stepLogin);
-      trackLog('✖', 'error', `Logging in`);
-      appendLogLine('✖', 'error', 'If you think this is a unusual error, please report this issue to the developers from the settings menu.');
-      trackLog('✖', 'error', 'If you think this is a unusual error, please report this issue to the developers from the settings menu.');
-      completeSingleVerification(false, 'failed', 'Invalid Credentials', startTime);
-      return;
-    }
-
-    if (pan === 'AADHA1234C') {
-      markLogStepFailure(stepLogin);
-      trackLog('✖', 'error', `Logging in`);
-      appendLogLine('✖', 'error', 'If you think this is a unusual error, please report this issue to the developers from the settings menu.');
-      trackLog('✖', 'error', 'If you think this is a unusual error, please report this issue to the developers from the settings menu.');
-      completeSingleVerification(false, 'failed', 'Aadhaar Link Required', startTime);
-      return;
-    }
-
-    if (pan === 'RETRY1234B') {
-      markLogStepSuccess(stepLogin);
-      trackLog('✔', 'success', `Logging in`);
-      
-      const stepDual = appendLogStep(`Handling dual login`);
-      trackLog('➜', 'info', `Handling dual login`);
-      await delay(4000);
-      if (state.isSingleCancelled) return;
-      markLogStepSuccess(stepDual);
-      trackLog('✔', 'success', `Handling dual login`);
     } else {
-      markLogStepSuccess(stepLogin);
-      trackLog('✔', 'success', `Logging in`);
-      await delay(1000);
-      if (state.isSingleCancelled) return;
+      markLogStepFailure(stepLogin, `Logging in: ${data.error}`);
+      trackLog('✖', 'error', `Logging in: ${data.error}`);
+      
+      appendLogLine('✖', 'error', 'If you think this is a unusual error, please report this issue to the developers.');
+      trackLog('✖', 'error', 'If you think this is a unusual error, please report this issue to the developers.');
+      
+      completeSingleVerification(false, 'failed', 'Logging In Failed', startTime);
     }
-
-    // Phase 5: Redirecting to Traces Portal
-    const stepRedirect = appendLogStep(`Redirecting to the traces portal`);
-    trackLog('➜', 'info', `Redirecting to the traces portal`);
-    await delay(1200);
-    if (state.isSingleCancelled) return;
-    markLogStepSuccess(stepRedirect);
-    trackLog('✔', 'success', `Redirecting to the traces portal`);
-
-    // Phase 6: Downloading 26s Data
-    const stepDl = appendLogStep(`Downloading 26s data`);
-    trackLog('➜', 'info', `Downloading 26s data`);
-    await delay(2800);
-    if (state.isSingleCancelled) return;
-    markLogStepSuccess(stepDl);
-    trackLog('✔', 'success', `Downloading 26s data`);
-
-    // Phase 7: Logging Out
-    const stepLogout = appendLogStep(`Logging out`);
-    trackLog('➜', 'info', `Logging out`);
-    await delay(800);
-    if (state.isSingleCancelled) return;
-    markLogStepSuccess(stepLogout);
-    trackLog('✔', 'success', `Logging out`);
-
-    // Save data
-    const dataTemplate = MOCK_DATA[pan] || MOCK_DATA['DEFAULT'];
-    state.singleData = JSON.parse(JSON.stringify(dataTemplate));
-    state.singleData.pan = pan;
-    state.singleData.assessmentYear = ay;
-    const startYear = parseInt(ay.split('-')[0]) - 1;
-    const endYear = startYear + 1;
-    state.singleData.financialYear = `${startYear}-${endYear.toString().substring(2)}`;
-    
-    completeSingleVerification(true, 'success', 'Retrieved successfully', startTime);
   }
 
   function completeSingleVerification(success, finalStatus, statusMessage, startTime) {
@@ -1176,7 +1007,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
-  function renderSingleResults() {
+  function  renderSingleResults() {
     if (!state.singleData) return;
     
     // Hide empty state, show shimmer state first to simulate premium UI loading!
@@ -1329,8 +1160,8 @@ document.addEventListener('DOMContentLoaded', () => {
     ]
   };
 
-  function openTanDetailModal(tan, type, name) {
-    const raw = state.rawTaxData;
+  function openTanDetailModal(tan, type, name, customRawData = null) {
+    const raw = customRawData || state.rawTaxData;
     const partKey = `tan${type}${tan}`;
     const entries = raw && raw.partabtxt ? raw.partabtxt[partKey] : null;
 
@@ -1382,7 +1213,7 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
 
-  // Subsection Tab switching within results
+  // Subsection Tab switching within results (Single Verification)
   subTabButtons.forEach(btn => {
     btn.addEventListener('click', () => {
       // Remove active from all subtabs
@@ -1396,6 +1227,222 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     });
   });
+
+  // Subsection Tab switching within Bulk Result Section
+  const bulkSubTabButtons = document.querySelectorAll('.bulk-sub-tab-btn');
+  bulkSubTabButtons.forEach(btn => {
+    btn.addEventListener('click', () => {
+      bulkSubTabButtons.forEach(t => t.classList.remove('active'));
+      const allBulkPanels = bulkResultCard.querySelectorAll('.sub-viewport .sub-panel');
+      allBulkPanels.forEach(p => p.classList.remove('active'));
+
+      btn.classList.add('active');
+      const targetPanel = document.getElementById(`sub-panel-${btn.getAttribute('data-subtab')}`);
+      if (targetPanel) {
+        targetPanel.classList.add('active');
+      }
+    });
+  });
+
+  // Bulk Result View Controls & Rendering
+  function hideBulkItemResult() {
+    state.selectedBulkViewIndex = null;
+    if (bulkResultCard) {
+      bulkResultCard.classList.add('hidden');
+    }
+    const allRows = bulkQueueBody.querySelectorAll('tr');
+    allRows.forEach(r => r.classList.remove('selected-row'));
+  }
+
+  function renderBulkItemResult(index) {
+    const item = state.bulkQueue[index];
+    if (!item || !item.resultData) return;
+
+    state.selectedBulkViewIndex = index;
+
+    // Highlight active row in table
+    const allRows = bulkQueueBody.querySelectorAll('tr');
+    allRows.forEach(r => r.classList.remove('selected-row'));
+    const targetRow = document.getElementById(`bulk-row-${index}`);
+    if (targetRow) targetRow.classList.add('selected-row');
+
+    // Show bulk result card
+    bulkResultCard.classList.remove('hidden');
+
+    const data = item.resultData;
+    bulkResultPanTitle.textContent = `PAN: ${data.pan || item.pan}`;
+    bulkResultMetaTitle.textContent = `Assessment Year: AY ${data.ay || item.ay} | Financial Year: FY ${data.fy || '-'}`;
+
+    // Summary cards
+    bulkSumTds.textContent = formatCurrency(data.summary?.tds || 0);
+    bulkSumTcs.textContent = formatCurrency(data.summary?.tcs || 0);
+    bulkSumPaid.textContent = formatCurrency(data.summary?.taxPaid || 0);
+    bulkSumRefund.textContent = formatCurrency(data.summary?.refund || 0);
+
+    // Part A (TDS)
+    bulkTablePartABody.innerHTML = '';
+    if (data.partA && data.partA.length > 0) {
+      bulkEmptyPartA.classList.add('hidden');
+      data.partA.forEach(row => {
+        const tr = document.createElement('tr');
+        tr.classList.add('detail-row');
+        tr.title = 'Click to view individual transactions';
+        tr.innerHTML = `
+          <td>${row.srNo}</td>
+          <td><code>${row.tan}</code></td>
+          <td>${row.name}</td>
+          <td class="num">${formatCurrency(row.credited)}</td>
+          <td class="num">${formatCurrency(row.deducted)}</td>
+          <td class="num">${formatCurrency(row.deposited)}</td>
+          <td class="num detail-expand-cell"><span class="detail-expand-icon">&#8677;</span></td>
+        `;
+        tr.addEventListener('click', () => openTanDetailModal(row.tan, 'A', row.name, item.rawTaxData));
+        bulkTablePartABody.appendChild(tr);
+      });
+    } else {
+      bulkEmptyPartA.classList.remove('hidden');
+    }
+
+    // Part B (TCS)
+    bulkTablePartBBody.innerHTML = '';
+    if (data.partB && data.partB.length > 0) {
+      bulkEmptyPartB.classList.add('hidden');
+      data.partB.forEach(row => {
+        const tr = document.createElement('tr');
+        tr.classList.add('detail-row');
+        tr.title = 'Click to view individual transactions';
+        tr.innerHTML = `
+          <td>${row.srNo}</td>
+          <td><code>${row.tan}</code></td>
+          <td>${row.name}</td>
+          <td class="num">${formatCurrency(row.debited)}</td>
+          <td class="num">${formatCurrency(row.collected)}</td>
+          <td class="num">${formatCurrency(row.deposited)}</td>
+          <td class="num detail-expand-cell"><span class="detail-expand-icon">&#8677;</span></td>
+        `;
+        tr.addEventListener('click', () => openTanDetailModal(row.tan, 'B', row.name, item.rawTaxData));
+        bulkTablePartBBody.appendChild(tr);
+      });
+    } else {
+      bulkEmptyPartB.classList.remove('hidden');
+    }
+
+    // Part C (Tax Paid)
+    bulkTablePartCBody.innerHTML = '';
+    if (data.partC && data.partC.length > 0) {
+      bulkEmptyPartC.classList.add('hidden');
+      data.partC.forEach(row => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td>${row.srNo}</td>
+          <td><code>${row.bsr}</code></td>
+          <td>${row.date}</td>
+          <td><code>${row.challan}</code></td>
+          <td class="num">${formatCurrency(row.taxPaid)}</td>
+        `;
+        bulkTablePartCBody.appendChild(tr);
+      });
+    } else {
+      bulkEmptyPartC.classList.remove('hidden');
+    }
+
+    // Part D (Refunds)
+    bulkTablePartDBody.innerHTML = '';
+    if (data.partD && data.partD.length > 0) {
+      bulkEmptyPartD.classList.add('hidden');
+      data.partD.forEach(row => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td>${row.srNo}</td>
+          <td>${row.ay}</td>
+          <td>${row.mode}</td>
+          <td class="num">${formatCurrency(row.refund)}</td>
+          <td class="num">${formatCurrency(row.interest)}</td>
+          <td>${row.date}</td>
+        `;
+        bulkTablePartDBody.appendChild(tr);
+      });
+    } else {
+      bulkEmptyPartD.classList.remove('hidden');
+    }
+
+    // Smoothly scroll to the bulk result card
+    bulkResultCard.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }
+
+  // Bind Bulk Result Close Button
+  if (bulkResultCloseBtn) {
+    bulkResultCloseBtn.addEventListener('click', hideBulkItemResult);
+  }
+
+  // Bind Bulk Result JSON & PDF Download Buttons
+  if (bulkDownloadJsonBtn) {
+    bulkDownloadJsonBtn.addEventListener('click', () => {
+      if (state.selectedBulkViewIndex === null) return;
+      const item = state.bulkQueue[state.selectedBulkViewIndex];
+      if (item && item.resultData) {
+        downloadDatasetJSON(item.resultData);
+      }
+    });
+  }
+
+  if (bulkDownloadPdfBtn) {
+    bulkDownloadPdfBtn.addEventListener('click', () => {
+      if (state.selectedBulkViewIndex === null) return;
+      const item = state.bulkQueue[state.selectedBulkViewIndex];
+      if (!item || !item.resultData || !item.rawTaxData) {
+        alert("No tax data available for PDF export.");
+        return;
+      }
+
+      checkExtension((isLive) => {
+        if (!isLive) {
+          showToast(
+            "PDF Downloader Helper Offline",
+            "Please load the helper extension in Developer Mode to download your Form 26AS as a PDF."
+          );
+          return;
+        }
+
+        bulkDownloadPdfBtn.disabled = true;
+        bulkDownloadPdfBtn.textContent = "Generating...";
+
+        chrome.runtime.sendMessage(
+          EXTENSION_ID,
+          {
+            action: "GENERATE_PDF",
+            payload: {
+              taxData: item.rawTaxData,
+              pan: item.pan,
+              ay: item.ay,
+              assesseeName: item.resultData.assesseeName,
+              address1: item.resultData.address1,
+              address2: item.resultData.address2,
+              panStatus: item.resultData.panStatus
+            }
+          },
+          (response) => {
+            bulkDownloadPdfBtn.disabled = false;
+            bulkDownloadPdfBtn.innerHTML = `
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                <polyline points="7 10 12 15 17 10"></polyline>
+                <line x1="12" y1="15" x2="12" y2="3"></line>
+              </svg>
+              Print PDF
+            `;
+            if (chrome.runtime.lastError || !response || (response.status !== "started" && response.status !== "success" && response.status !== "SUCCESS")) {
+              console.error("PDF Extension rendering error:", chrome.runtime.lastError || response?.error);
+              showToast(
+                "PDF Generation Interrupted",
+                "Failed to communicate with the helper extension. Please ensure it is active and reload if needed."
+              );
+            }
+          }
+        );
+      });
+    });
+  }
 
   // Modal helper bindings
   function hideModal() {
@@ -1420,65 +1467,59 @@ document.addEventListener('DOMContentLoaded', () => {
   downloadPdfSingle.addEventListener('click', () => {
     if (!state.singleData) return;
 
-    // 1. Demo Mode:
-    if (state.connectionMode === 'demo') {
-      if (state.pdfBase64) {
-        const link = document.createElement('a');
-        link.href = `data:application/pdf;base64,${state.pdfBase64}`;
-        link.download = `Form26AS_${state.singleData.pan}_${state.singleData.assessmentYear}.pdf`;
-        link.click();
-      } else {
-        printReportWindow(state.singleData);
+    checkExtension((isLive) => {
+      if (!isLive) {
+        showToast(
+          "PDF Downloader Helper Offline",
+          "Please load the helper extension in Developer Mode to download your Form 26AS as a PDF."
+        );
+        return;
       }
-      return;
-    }
 
-    // 2. Live Web Mode: Use the companion Chrome Extension to render locally
-    if (!window.chrome || !chrome.runtime || !chrome.runtime.sendMessage) {
-      alert("Please install the PDF Exporter companion extension first.");
-      return;
-    }
-
-    if (!state.rawTaxData) {
-      alert("No raw tax data available to generate PDF. Run the retrieval first.");
-      return;
-    }
-
-    // Disable button temporarily to prevent double submission
-    downloadPdfSingle.disabled = true;
-    downloadPdfSingle.textContent = "Generating...";
-
-    chrome.runtime.sendMessage(
-      EXTENSION_ID,
-      {
-        action: "GENERATE_PDF",
-        payload: {
-          taxData: state.rawTaxData,
-          pan: state.singleData.pan,
-          ay: state.singleData.assessmentYear,
-          assesseeName: state.singleData.assesseeName,
-          address1: state.singleData.address1,
-          address2: state.singleData.address2,
-          panStatus: state.singleData.panStatus
-        }
-      },
-      (response) => {
-        downloadPdfSingle.disabled = false;
-        downloadPdfSingle.innerHTML = `
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
-            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-            <polyline points="7 10 12 15 17 10"></polyline>
-            <line x1="12" y1="15" x2="12" y2="3"></line>
-          </svg>
-          Print PDF
-        `;
-
-        if (chrome.runtime.lastError || !response || response.status !== "started") {
-          console.error("Extension generation failed:", chrome.runtime.lastError);
-          alert("Failed to communicate with the companion extension. Please ensure it is enabled.");
-        }
+      if (!state.rawTaxData) {
+        alert("No raw tax data available to generate PDF. Run the retrieval first.");
+        return;
       }
-    );
+
+      // Disable button temporarily to prevent double submission
+      downloadPdfSingle.disabled = true;
+      downloadPdfSingle.textContent = "Generating...";
+
+      chrome.runtime.sendMessage(
+        EXTENSION_ID,
+        {
+          action: "GENERATE_PDF",
+          payload: {
+            taxData: state.rawTaxData,
+            pan: state.singleData.pan,
+            ay: state.singleData.assessmentYear,
+            assesseeName: state.singleData.assesseeName,
+            address1: state.singleData.address1,
+            address2: state.singleData.address2,
+            panStatus: state.singleData.panStatus
+          }
+        },
+        (response) => {
+          downloadPdfSingle.disabled = false;
+          downloadPdfSingle.innerHTML = `
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+              <polyline points="7 10 12 15 17 10"></polyline>
+              <line x1="12" y1="15" x2="12" y2="3"></line>
+            </svg>
+            Print PDF
+          `;
+
+          if (chrome.runtime.lastError || !response || response.status !== "started") {
+            console.error("Extension generation failed:", chrome.runtime.lastError);
+            showToast(
+              "PDF Generation Interrupted",
+              "Failed to communicate with the helper extension. Please ensure it is active and reload if needed."
+            );
+          }
+        }
+      );
+    });
   });
 
 
@@ -1530,16 +1571,7 @@ document.addEventListener('DOMContentLoaded', () => {
     reader.readAsText(file);
   }
 
-  // Load Demo Bulk Records
-  loadSampleBulkBtn.addEventListener('click', () => {
-    bulkTextInput.value = 
-`ABCDE1234F, Secret123, 2026-27
-RETRY1234B, Secure99, 2025-26
-ERROR1234A, WrongPass, 2026-27
-AADHA1234C, LinkError, 2026-27
-PANIN8888Z, HighNet99, 2026-27
-XYZAB5678Q, pass1234, 2024-25`;
-  });
+
 
   // Parse Text Input
   parseBulkBtn.addEventListener('click', () => {
@@ -1555,8 +1587,10 @@ XYZAB5678Q, pass1234, 2024-25`;
     const MIN_AY_START = 2009; // 2009-10 is the earliest allowed AY
     const ayFormatRegex = /^(\d{4})-(\d{2})$/;
     const skipped = [];
+    const duplicates = [];
+    const seenPanAy = new Set();
 
-    lines.forEach(line => {
+    lines.forEach((line, lineIdx) => {
       if (!line.trim()) return;
       const parts = line.split(',');
       if (parts.length >= 2) {
@@ -1566,28 +1600,36 @@ XYZAB5678Q, pass1234, 2024-25`;
 
         // Validate: PAN must be 1–16 chars
         if (pan.length === 0 || pan.length > 16) {
-          skipped.push(`Row skipped (PAN '${pan}' exceeds 16 characters or is empty)`);
+          skipped.push(`Row ${lineIdx + 1}: PAN '${pan}' exceeds 16 characters or is empty.`);
           return;
         }
 
         // Validate: AY must match YYYY-YY format
         const ayMatch = ay.match(ayFormatRegex);
         if (!ayMatch) {
-          skipped.push(`Row skipped (AY '${ay}' is not in YYYY-YY format)`);
+          skipped.push(`Row ${lineIdx + 1}: Assessment Year '${ay}' is not in YYYY-YY format.`);
           return;
         }
         const ayStartYear = parseInt(ayMatch[1]);
         const ayEndSuffix = parseInt(ayMatch[2]);
         // Check year is consecutive (e.g. 2026-27 means end = start+1)
         if (ayEndSuffix !== (ayStartYear + 1) % 100) {
-          skipped.push(`Row skipped (AY '${ay}' years are not consecutive)`);
+          skipped.push(`Row ${lineIdx + 1}: AY '${ay}' years are not consecutive.`);
           return;
         }
         // Must be >= 2009-10
         if (ayStartYear < MIN_AY_START) {
-          skipped.push(`Row skipped (AY '${ay}' is before the minimum 2009-10)`);
+          skipped.push(`Row ${lineIdx + 1}: AY '${ay}' is before the minimum 2009-10.`);
           return;
         }
+
+        // Deduplication: Check if exact same PAN and same Assessment Year already exists
+        const panAyKey = `${pan}__${ay}`;
+        if (seenPanAy.has(panAyKey)) {
+          duplicates.push(`Row ${lineIdx + 1}: Duplicate entry for PAN '${pan}' (${ay}) skipped.`);
+          return;
+        }
+        seenPanAy.add(panAyKey);
 
         parsedQueue.push({
           pan,
@@ -1601,7 +1643,15 @@ XYZAB5678Q, pass1234, 2024-25`;
     });
 
     if (skipped.length > 0) {
-      console.warn('Bulk parse skipped rows:', skipped);
+      console.warn('Bulk parse skipped invalid rows:', skipped);
+    }
+
+    if (duplicates.length > 0) {
+      console.info('Bulk parse removed duplicate rows:', duplicates);
+      showToast(
+        "Duplicate Entries Removed",
+        `${duplicates.length} duplicate row(s) with identical PAN and Assessment Year were automatically filtered out.`
+      );
     }
 
     if (parsedQueue.length === 0) {
@@ -1609,8 +1659,25 @@ XYZAB5678Q, pass1234, 2024-25`;
       return;
     }
 
+    // Stable grouping by PAN so all multi-year records for the same PAN are adjacent in the queue
+    const groupedQueue = [];
+    const panMap = new Map();
+
+    parsedQueue.forEach(item => {
+      if (!panMap.has(item.pan)) {
+        panMap.set(item.pan, []);
+      }
+      panMap.get(item.pan).push(item);
+    });
+
+    panMap.forEach((itemsForPan) => {
+      // Sort assessment years descending (e.g. 2024-25, 2023-24, 2022-23)
+      itemsForPan.sort((a, b) => b.ay.localeCompare(a.ay));
+      groupedQueue.push(...itemsForPan);
+    });
+
     // Load into state
-    state.bulkQueue = parsedQueue;
+    state.bulkQueue = groupedQueue;
     state.bulkCurrentIndex = 0;
     state.bulkStatus = 'idle';
     state.bulkActiveWorkers = 0;
@@ -1663,6 +1730,10 @@ XYZAB5678Q, pass1234, 2024-25`;
       const tr = document.createElement('tr');
       tr.id = `bulk-row-${index}`;
       
+      if (state.selectedBulkViewIndex === index) {
+        tr.classList.add('selected-row');
+      }
+      
       // Checkbox is enabled only if retrieval was successful
       const isCheckboxDisabled = item.status !== 'success';
       if (isCheckboxDisabled) {
@@ -1683,12 +1754,23 @@ XYZAB5678Q, pass1234, 2024-25`;
         </div>
       `;
 
+      const viewBtnHtml = `
+        <button class="secondary-button size-xs btn-view-bulk-row" data-index="${index}" id="btn-view-bulk-row-${index}" ${item.status === 'success' ? '' : 'disabled'} title="View Form 26AS Statement" style="display: inline-flex; align-items: center; gap: 4px; padding: 3px 8px; font-size: 0.72rem;">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="12" height="12">
+            <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+            <circle cx="12" cy="12" r="3"></circle>
+          </svg>
+          View
+        </button>
+      `;
+
       tr.innerHTML = `
         <td>${checkboxHtml}<span class="sr-num">${index + 1}</span></td>
         <td><code>${item.pan}</code></td>
         <td>${item.ay}</td>
         <td>${statusPill}</td>
         <td>${progressIndicator}</td>
+        <td style="text-align: center;">${viewBtnHtml}</td>
       `;
       
       bulkQueueBody.appendChild(tr);
@@ -1700,6 +1782,14 @@ XYZAB5678Q, pass1234, 2024-25`;
         const idx = parseInt(e.target.getAttribute('data-index'));
         state.bulkQueue[idx].checked = e.target.checked;
         updateBulkActionsUI();
+      });
+    });
+
+    const viewButtons = document.querySelectorAll('.btn-view-bulk-row');
+    viewButtons.forEach(btn => {
+      btn.addEventListener('click', () => {
+        const idx = parseInt(btn.getAttribute('data-index'));
+        renderBulkItemResult(idx);
       });
     });
 
@@ -1738,7 +1828,7 @@ XYZAB5678Q, pass1234, 2024-25`;
       } else {
         if (dlPdfBtn) {
           const hasFinishedPdf = checkedItems.some(item => item.status === 'success' && item.rawTaxData);
-          dlPdfBtn.disabled = !hasFinishedPdf;
+          dlPdfBtn.disabled = !state.extensionInstalled || !hasFinishedPdf;
         }
         if (dlJsonBtn) {
           const hasFinishedJson = checkedItems.some(item => item.status === 'success' && item.resultData);
@@ -1748,7 +1838,7 @@ XYZAB5678Q, pass1234, 2024-25`;
     } else {
       if (dlPdfBtn) {
         const hasFinishedPdf = state.bulkQueue.some(item => item.status === 'success' && item.rawTaxData);
-        dlPdfBtn.disabled = !hasFinishedPdf;
+        dlPdfBtn.disabled = !state.extensionInstalled || !hasFinishedPdf;
       }
       if (dlJsonBtn) {
         const hasFinishedJson = state.bulkQueue.some(item => item.status === 'success' && item.resultData);
@@ -1831,6 +1921,8 @@ XYZAB5678Q, pass1234, 2024-25`;
     state.bulkQueue = [];
     state.bulkLogsMap = {};
     state.bulkSelectionMode = false;
+    state.activeBulkSession = null;
+    hideBulkItemResult();
     
     const btnSelect = document.getElementById('btn-bulk-select');
     if (btnSelect) btnSelect.textContent = "Select Entries";
@@ -1907,17 +1999,22 @@ XYZAB5678Q, pass1234, 2024-25`;
 
     if (itemsToDownload.length === 0) return;
 
-    const dlPdfBtn = document.getElementById('btn-bulk-dl-pdf');
-    const originalText = dlPdfBtn.innerHTML;
-    dlPdfBtn.disabled = true;
-    dlPdfBtn.textContent = "Generating PDFs...";
+    checkExtension(async (isLive) => {
+      if (!isLive) {
+        showToast(
+          "PDF Downloader Helper Offline",
+          "Please load the helper extension in Developer Mode to download your Form 26AS PDFs."
+        );
+        return;
+      }
 
-    const generatePdfBase64 = (item) => {
-      return new Promise((resolve, reject) => {
-        if (state.connectionMode === 'demo') {
-          printReportWindow(item.resultData);
-          resolve(null);
-        } else {
+      const dlPdfBtn = document.getElementById('btn-bulk-dl-pdf');
+      const originalText = dlPdfBtn.innerHTML;
+      dlPdfBtn.disabled = true;
+      dlPdfBtn.textContent = "Generating PDFs...";
+
+      const generatePdfBase64 = (item) => {
+        return new Promise((resolve, reject) => {
           chrome.runtime.sendMessage(
             EXTENSION_ID,
             {
@@ -1945,15 +2042,11 @@ XYZAB5678Q, pass1234, 2024-25`;
               }
             }
           );
-        }
-      });
-    };
+        });
+      };
 
-    try {
-      if (itemsToDownload.length === 1 || state.connectionMode === 'demo') {
-        if (state.connectionMode === 'demo') {
-          itemsToDownload.forEach(item => printReportWindow(item.resultData));
-        } else {
+      try {
+        if (itemsToDownload.length === 1) {
           chrome.runtime.sendMessage(
             EXTENSION_ID,
             {
@@ -1970,38 +2063,41 @@ XYZAB5678Q, pass1234, 2024-25`;
               }
             }
           );
-        }
-      } else {
-        const zip = new JSZip();
-        for (const item of itemsToDownload) {
-          dlPdfBtn.textContent = `Rendering ${item.pan}...`;
-          try {
-            const pdfResult = await generatePdfBase64(item);
-            if (pdfResult && pdfResult.base64) {
-              zip.file(pdfResult.filename, pdfResult.base64, { base64: true });
+        } else {
+          const zip = new JSZip();
+          for (const item of itemsToDownload) {
+            dlPdfBtn.textContent = `Rendering ${item.pan}...`;
+            try {
+              const pdfResult = await generatePdfBase64(item);
+              if (pdfResult && pdfResult.base64) {
+                zip.file(pdfResult.filename, pdfResult.base64, { base64: true });
+              }
+            } catch (err) {
+              console.error("Failed to include PDF in ZIP:", err.message);
             }
-          } catch (err) {
-            rowLog('✖', 'error', `Failed to include PDF in ZIP: ${err.message}`);
           }
-        }
 
-        dlPdfBtn.textContent = "Creating ZIP file...";
-        const content = await zip.generateAsync({ type: "blob" });
-        const url = URL.createObjectURL(content);
-        const link = document.createElement("a");
-        link.href = url;
-        link.download = `Form26AS_Export_${new Date().toISOString().slice(0, 10)}.zip`;
-        link.click();
-        URL.revokeObjectURL(url);
+          dlPdfBtn.textContent = "Creating ZIP file...";
+          const content = await zip.generateAsync({ type: "blob" });
+          const url = URL.createObjectURL(content);
+          const link = document.createElement("a");
+          link.href = url;
+          link.download = `Form26AS_Export_${new Date().toISOString().slice(0, 10)}.zip`;
+          link.click();
+          URL.revokeObjectURL(url);
+        }
+      } catch (error) {
+        console.error("Bulk PDF download failed:", error);
+        showToast(
+          "PDF Generation Interrupted",
+          "An error occurred during bulk PDF generation. Please check the helper extension."
+        );
+      } finally {
+        dlPdfBtn.innerHTML = originalText;
+        dlPdfBtn.disabled = false;
+        updateBulkActionsUI();
       }
-    } catch (error) {
-      console.error("Bulk PDF download failed:", error);
-      alert("An error occurred during bulk PDF generation.");
-    } finally {
-      dlPdfBtn.innerHTML = originalText;
-      dlPdfBtn.disabled = false;
-      updateBulkActionsUI();
-    }
+    });
   });
 
   const selectAllEl = document.getElementById('bulk-select-all');
@@ -2043,16 +2139,22 @@ XYZAB5678Q, pass1234, 2024-25`;
 
     // Launch workers up to limits
     while (state.bulkActiveWorkers < CONCURRENCY_LIMIT && state.bulkStatus === 'running') {
-      // Find next pending item index
-      const nextIndex = state.bulkQueue.findIndex(item => item.status === 'pending');
-      if (nextIndex === -1) break; // No more pending
+      // Get list of PANs currently being processed by active running workers
+      const currentlyRunningPans = new Set(
+        state.bulkQueue.filter(item => item.status === 'running').map(item => item.pan)
+      );
+
+      // Find next pending item whose PAN is NOT currently being processed
+      // (This guarantees multiple AYs for the SAME PAN run sequentially one-by-one, while DIFFERENT PANs run in parallel)
+      const nextIndex = state.bulkQueue.findIndex(item => item.status === 'pending' && !currentlyRunningPans.has(item.pan));
+      if (nextIndex === -1) break; // All pending items are either running or waiting for their PAN's turn
       
       // Claim item and start worker
       state.bulkQueue[nextIndex].status = 'running';
       state.bulkActiveWorkers++;
       updateBulkProgressUI();
       
-      // Run async worker thread simulation
+      // Run async worker thread
       simulateRowWorker(nextIndex);
     }
   }
@@ -2103,7 +2205,7 @@ XYZAB5678Q, pass1234, 2024-25`;
       if (percentEl) percentEl.textContent = `${percent}%`;
     };
 
-    // Update row status pill in table
+    // Update row status
     const pillEl = document.getElementById(`row-status-pill-${index}`);
     if (pillEl) {
       pillEl.className = 'status-pill running';
@@ -2111,7 +2213,44 @@ XYZAB5678Q, pass1234, 2024-25`;
     }
 
     try {
-      if (state.connectionMode === 'live') {
+      let tracesBase = null;
+      let assesseeName = '';
+      let panStatus = '';
+      let address1 = '';
+      let address2 = '';
+
+      // Check if we can reuse the active authenticated TRACES session for the SAME PAN
+      const canReuseSession = (
+        state.activeBulkSession &&
+        state.activeBulkSession.pan === item.pan &&
+        state.activeBulkSession.password === item.password &&
+        state.activeBulkSession.tracesBase
+      );
+
+      if (canReuseSession) {
+        // Reuse session
+        tracesBase = state.activeBulkSession.tracesBase;
+        assesseeName = state.activeBulkSession.assesseeName || '';
+        panStatus = state.activeBulkSession.panStatus || '';
+        address1 = state.activeBulkSession.address1 || '';
+        address2 = state.activeBulkSession.address2 || '';
+
+        const reuseLine = stepStart(`Reusing active TRACES session for AY ${item.ay}`);
+        updateRowProgress(65);
+        stepSuccess(reuseLine, `Reusing active TRACES session for AY ${item.ay}`);
+      } else {
+        // If there was an active session from a previous different PAN, logout first
+        if (state.activeBulkSession && state.activeBulkSession.pan !== item.pan) {
+          try {
+            await fetch(`${API_BASE}/api/logout`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ pan: state.activeBulkSession.pan })
+            });
+          } catch (_) {}
+          state.activeBulkSession = null;
+        }
+
         const connLine = stepStart(`Establishing connection`);
         updateRowProgress(15);
         
@@ -2127,30 +2266,30 @@ XYZAB5678Q, pass1234, 2024-25`;
           data = await response.json();
         } catch (err) {
           stepFailure(connLine, `Establishing connection: Connection to backend failed.`);
-          rowLog('✖', 'error', 'If you think this is a unusual error, please report this issue to the developers from the settings menu.');
+          rowLog('✖', 'error', 'If you think this is a unusual error, please report this issue to the developers.');
           if (state.activeModalSource === index) {
-            appendLogLine('✖', 'error', 'If you think this is a unusual error, please report this issue to the developers from the settings menu.');
+            appendLogLine('✖', 'error', 'If you think this is a unusual error, please report this issue to the developers.');
           }
           item.status = 'failed';
           if (pillEl) {
             pillEl.className = 'status-pill failed';
             pillEl.textContent = 'failed';
           }
-          return; // Let outer finally block clean up!
+          return;
         }
 
         if (data.status === 'failed') {
           stepFailure(connLine, `Establishing connection: ${data.error}`);
-          rowLog('✖', 'error', 'If you think this is a unusual error, please report this issue to the developers from the settings menu.');
+          rowLog('✖', 'error', 'If you think this is a unusual error, please report this issue to the developers.');
           if (state.activeModalSource === index) {
-            appendLogLine('✖', 'error', 'If you think this is a unusual error, please report this issue to the developers from the settings menu.');
+            appendLogLine('✖', 'error', 'If you think this is a unusual error, please report this issue to the developers.');
           }
           item.status = 'failed';
           if (pillEl) {
             pillEl.className = 'status-pill failed';
             pillEl.textContent = 'failed';
           }
-          return; // Let outer finally block clean up!
+          return;
         }
 
         // Connection succeeded
@@ -2171,227 +2310,111 @@ XYZAB5678Q, pass1234, 2024-25`;
           data = await response.json();
         } catch (err) {
           stepFailure(userLine, `User ID verification: Verification request failed.`);
-          rowLog('✖', 'error', 'If you think this is a unusual error, please report this issue to the developers from the settings menu.');
+          rowLog('✖', 'error', 'If you think this is a unusual error, please report this issue to the developers.');
           if (state.activeModalSource === index) {
-            appendLogLine('✖', 'error', 'If you think this is a unusual error, please report this issue to the developers from the settings menu.');
+            appendLogLine('✖', 'error', 'If you think this is a unusual error, please report this issue to the developers.');
           }
           item.status = 'failed';
           if (pillEl) {
             pillEl.className = 'status-pill failed';
             pillEl.textContent = 'failed';
           }
-          return; // Let outer finally block clean up!
+          return;
         }
 
         if (data.status === 'failed') {
           stepFailure(userLine, `User ID verification: ${data.error}`);
-          rowLog('✖', 'error', 'If you think this is a unusual error, please report this issue to the developers from the settings menu.');
+          rowLog('✖', 'error', 'If you think this is a unusual error, please report this issue to the developers.');
           if (state.activeModalSource === index) {
-            appendLogLine('✖', 'error', 'If you think this is a unusual error, please report this issue to the developers from the settings menu.');
+            appendLogLine('✖', 'error', 'If you think this is a unusual error, please report this issue to the developers.');
           }
           item.status = 'failed';
           if (pillEl) {
             pillEl.className = 'status-pill failed';
             pillEl.textContent = 'failed';
           }
-          return; // Let outer finally block clean up!
+          return;
         }
 
-        // User ID verification succeeded
+        // User verification succeeded
         updateRowProgress(60);
         stepSuccess(userLine, `User ID verification`);
         
         const reqId = data.reqId;
         const secAccssMsg = data.secAccssMsg;
-        const entityType = data.entityType || 'PAN';
-
-        // 3. Perform Password Login
-        const loginLine = stepStart(`Logging in`);
+        const entityType = data.entityType;
+        
+        // 3. User Authentication (Login)
+        const loginLine = stepStart(`User authentication`);
         updateRowProgress(70);
 
         try {
           const response = await fetch(`${API_BASE}/api/login`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ pan: item.pan, password: item.password, reqId: reqId, secAccssMsg: secAccssMsg, entityType: entityType })
+            body: JSON.stringify({
+              pan: item.pan,
+              password: item.password,
+              reqId: reqId,
+              secAccssMsg: secAccssMsg,
+              entityType: entityType
+            })
           });
           if (!response.ok) throw new Error(`HTTP ${response.status}`);
           data = await response.json();
         } catch (err) {
-          stepFailure(loginLine, `Logging in: Login request failed.`);
-          rowLog('✖', 'error', 'If you think this is a unusual error, please report this issue to the developers from the settings menu.');
+          stepFailure(loginLine, `User authentication: Login request failed.`);
+          rowLog('✖', 'error', 'If you think this is a unusual error, please report this issue to the developers.');
           if (state.activeModalSource === index) {
-            appendLogLine('✖', 'error', 'If you think this is a unusual error, please report this issue to the developers from the settings menu.');
+            appendLogLine('✖', 'error', 'If you think this is a unusual error, please report this issue to the developers.');
           }
           item.status = 'failed';
           if (pillEl) {
             pillEl.className = 'status-pill failed';
             pillEl.textContent = 'failed';
           }
-          return; // Let outer finally block clean up!
+          return;
         }
 
-        if (data.status === 'success') {
-          updateRowProgress(75);
-          stepSuccess(loginLine, `Logging in`);
-          
-          item.liveReqId = data.reqId;
-          item.liveSecAccssMsg = data.secAccssMsg;
-          
-          // Phase 5: Redirecting to Traces Portal
-          const redirectLine = stepStart(`Redirecting to Traces Portal`);
-          updateRowProgress(80);
-          
-          try {
-            const response = await fetch(`${API_BASE}/api/redirect-to-traces`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ pan: item.pan, ay: item.ay })
-            });
-            if (!response.ok) throw new Error(`HTTP ${response.status}`);
-            data = await response.json();
-          } catch (err) {
-            stepFailure(redirectLine, `Redirecting to Traces Portal: Redirect request failed.`);
-            rowLog('✖', 'error', 'If you think this is a unusual error, please report this issue to the developers from the settings menu.');
-            if (state.activeModalSource === index) {
-              appendLogLine('✖', 'error', 'If you think this is a unusual error, please report this issue to the developers from the settings menu.');
-            }
-            item.status = 'failed';
-            if (pillEl) {
-              pillEl.className = 'status-pill failed';
-              pillEl.textContent = 'failed';
-            }
-            return;
+        if (data.status === 'failed') {
+          stepFailure(loginLine, `User authentication: ${data.error}`);
+          rowLog('✖', 'error', 'If you think this is a unusual error, please report this issue to the developers.');
+          if (state.activeModalSource === index) {
+            appendLogLine('✖', 'error', 'If you think this is a unusual error, please report this issue to the developers.');
           }
-          
-          if (data.status === 'success') {
-            updateRowProgress(85);
-            stepSuccess(redirectLine, `Redirecting to Traces Portal`);
-            
-            item.liveTracesBase = data.tracesBase;
-            
-            // Phase 6: Downloading 26AS Data
-            const downloadLine = stepStart(`Downloading 26AS data`);
-            updateRowProgress(90);
-            
-            try {
-              const response = await fetch(`${API_BASE}/api/download-26as`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ pan: item.pan, ay: item.ay, tracesBase: item.liveTracesBase })
-              });
-              if (!response.ok) throw new Error(`HTTP ${response.status}`);
-              data = await response.json();
-            } catch (err) {
-              stepFailure(downloadLine, `Downloading 26AS data: Download request failed.`);
-              rowLog('✖', 'error', 'If you think this is a unusual error, please report this issue to the developers from the settings menu.');
-              if (state.activeModalSource === index) {
-                appendLogLine('✖', 'error', 'If you think this is a unusual error, please report this issue to the developers from the settings menu.');
-              }
-              item.status = 'failed';
-              if (pillEl) {
-                pillEl.className = 'status-pill failed';
-                pillEl.textContent = 'failed';
-              }
-              return;
-            }
-            
-            if (data.status === 'success') {
-              updateRowProgress(95);
-              stepSuccess(downloadLine, `Downloading 26AS data`);
-              
-              // Store results
-              item.resultData = translateTracesData(data.taxData, item.pan, item.ay);
-              item.resultData.assesseeName = data.assesseeName;
-              item.resultData.panStatus = data.panStatus;
-              item.resultData.address1 = data.address1;
-              item.resultData.address2 = data.address2;
-              item.resultData.fy = data.fy;
-              item.resultData.ay = item.ay;
-              item.rawTaxData = data.taxData;
-              
-              // Phase 7: Logging out
-              const logoutLine = stepStart(`Logging out`);
-              updateRowProgress(98);
-              try {
-                const logoutResp = await fetch(`${API_BASE}/api/logout`, {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({ pan: item.pan })
-                });
-                const logoutData = logoutResp.ok ? await logoutResp.json() : { status: 'failed' };
-                if (logoutData.status === 'success') {
-                  stepSuccess(logoutLine, `Logging out`);
-                  rowLog('✔', 'success', `Logging out`);
-                  item.status = 'success';
-                  if (pillEl) {
-                    pillEl.className = 'status-pill success';
-                    pillEl.textContent = 'success';
-                  }
-                  updateRowProgress(100);
-                  updateBulkActionsUI();
-                } else {
-                  throw new Error(logoutData.error || 'Logout failed');
-                }
-              } catch (logoutErr) {
-                stepFailure(logoutLine, `Logging out: ${logoutErr.message}`);
-                rowLog('✖', 'error', 'If you think this is a unusual error, please report this issue to the developers from the settings menu.');
-                if (state.activeModalSource === index) {
-                  appendLogLine('✖', 'error', 'If you think this is a unusual error, please report this issue to the developers from the settings menu.');
-                }
-                item.status = 'failed';
-                if (pillEl) {
-                  pillEl.className = 'status-pill failed';
-                  pillEl.textContent = 'failed';
-                }
-              }
-            } else {
-              stepFailure(downloadLine, `Downloading 26AS data: ${data.error}`);
-              rowLog('✖', 'error', 'If you think this is a unusual error, please report this issue to the developers from the settings menu.');
-              if (state.activeModalSource === index) {
-                appendLogLine('✖', 'error', 'If you think this is a unusual error, please report this issue to the developers from the settings menu.');
-              }
-              item.status = 'failed';
-              if (pillEl) {
-                pillEl.className = 'status-pill failed';
-                pillEl.textContent = 'failed';
-              }
-            }
-          } else {
-            stepFailure(redirectLine, `Redirecting to Traces Portal: ${data.error}`);
-            rowLog('✖', 'error', 'If you think this is a unusual error, please report this issue to the developers from the settings menu.');
-            if (state.activeModalSource === index) {
-              appendLogLine('✖', 'error', 'If you think this is a unusual error, please report this issue to the developers from the settings menu.');
-            }
-            item.status = 'failed';
-            if (pillEl) {
-              pillEl.className = 'status-pill failed';
-              pillEl.textContent = 'failed';
-            }
+          item.status = 'failed';
+          if (pillEl) {
+            pillEl.className = 'status-pill failed';
+            pillEl.textContent = 'failed';
           }
-        } else if (data.status === 'dual_login') {
-          updateRowProgress(75);
-          stepSuccess(loginLine, `Logging in`);
-          
-          const originalResponse = data.originalResponse;
-          
-          // Phase 4: Handling Dual Login
+          return;
+        }
+
+        // Login succeeded
+        updateRowProgress(75);
+        stepSuccess(loginLine, `User authentication`);
+
+        // 4. Handle Dual Login (if required)
+        if (data.status === 'dual_login') {
           const dualLine = stepStart(`Handling dual login`);
           updateRowProgress(80);
-          
+
           try {
             const response = await fetch(`${API_BASE}/api/handle-dual-login`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ pan: item.pan, originalResponse: originalResponse })
+              body: JSON.stringify({
+                pan: item.pan,
+                originalResponse: data.originalResponse
+              })
             });
             if (!response.ok) throw new Error(`HTTP ${response.status}`);
             data = await response.json();
           } catch (err) {
             stepFailure(dualLine, `Handling dual login: Override request failed.`);
-            rowLog('✖', 'error', 'If you think this is a unusual error, please report this issue to the developers from the settings menu.');
+            rowLog('✖', 'error', 'If you think this is a unusual error, please report this issue to the developers.');
             if (state.activeModalSource === index) {
-              appendLogLine('✖', 'error', 'If you think this is a unusual error, please report this issue to the developers from the settings menu.');
+              appendLogLine('✖', 'error', 'If you think this is a unusual error, please report this issue to the developers.');
             }
             item.status = 'failed';
             if (pillEl) {
@@ -2400,244 +2423,209 @@ XYZAB5678Q, pass1234, 2024-25`;
             }
             return;
           }
-          
-          if (data.status === 'success') {
-            updateRowProgress(85);
-            stepSuccess(dualLine, `Handling dual login`);
-            
-            // Phase 5: Redirecting to Traces Portal
-            const redirectLine = stepStart(`Redirecting to Traces Portal`);
-            updateRowProgress(90);
-            
-            try {
-              const response = await fetch(`${API_BASE}/api/redirect-to-traces`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ pan: item.pan, ay: item.ay })
-              });
-              if (!response.ok) throw new Error(`HTTP ${response.status}`);
-              data = await response.json();
-            } catch (err) {
-              stepFailure(redirectLine, `Redirecting to Traces Portal: Redirect request failed.`);
-              rowLog('✖', 'error', 'If you think this is a unusual error, please report this issue to the developers from the settings menu.');
-              if (state.activeModalSource === index) {
-                appendLogLine('✖', 'error', 'If you think this is a unusual error, please report this issue to the developers from the settings menu.');
-              }
-              item.status = 'failed';
-              if (pillEl) {
-                pillEl.className = 'status-pill failed';
-                pillEl.textContent = 'failed';
-              }
-              return;
-            }
-            
-            if (data.status === 'success') {
-              updateRowProgress(95);
-              stepSuccess(redirectLine, `Redirecting to Traces Portal`);
-              
-              item.liveTracesBase = data.tracesBase;
-              
-            // Phase 6: Downloading 26AS Data
-            const downloadLine = stepStart(`Downloading 26AS data`);
-            updateRowProgress(90);
-            
-            try {
-              const response = await fetch(`${API_BASE}/api/download-26as`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ pan: item.pan, ay: item.ay, tracesBase: item.liveTracesBase })
-              });
-              if (!response.ok) throw new Error(`HTTP ${response.status}`);
-              data = await response.json();
-            } catch (err) {
-              stepFailure(downloadLine, `Downloading 26AS data: Download request failed.`);
-              rowLog('✖', 'error', 'If you think this is a unusual error, please report this issue to the developers from the settings menu.');
-              if (state.activeModalSource === index) {
-                appendLogLine('✖', 'error', 'If you think this is a unusual error, please report this issue to the developers from the settings menu.');
-              }
-              item.status = 'failed';
-              if (pillEl) {
-                pillEl.className = 'status-pill failed';
-                pillEl.textContent = 'failed';
-              }
-              return;
-            }
-            
-            if (data.status === 'success') {
-              updateRowProgress(95);
-              stepSuccess(downloadLine, `Downloading 26AS data`);
-              
-              // Store results
-              item.resultData = translateTracesData(data.taxData, item.pan, item.ay);
-              item.resultData.assesseeName = data.assesseeName;
-              item.resultData.panStatus = data.panStatus;
-              item.resultData.address1 = data.address1;
-              item.resultData.address2 = data.address2;
-              item.resultData.fy = data.fy;
-              item.resultData.ay = data.ay;
-              item.rawTaxData = data.taxData;
-              
-              // Phase 7: Logging out
-              const logoutLine = stepStart(`Logging out`);
-              updateRowProgress(98);
-              try {
-                const logoutResp = await fetch(`${API_BASE}/api/logout`, {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({ pan: item.pan })
-                });
-                const logoutData = logoutResp.ok ? await logoutResp.json() : { status: 'failed' };
-                if (logoutData.status === 'success') {
-                  stepSuccess(logoutLine, `Logging out`);
-                  rowLog('✔', 'success', `Logging out`);
-                  item.status = 'success';
-                  if (pillEl) {
-                    pillEl.className = 'status-pill success';
-                    pillEl.textContent = 'success';
-                  }
-                  updateRowProgress(100);
-                  updateBulkActionsUI();
-                } else {
-                  throw new Error(logoutData.error || 'Logout failed');
-                }
-              } catch (logoutErr) {
-                stepFailure(logoutLine, `Logging out: ${logoutErr.message}`);
-                rowLog('✖', 'error', 'If you think this is a unusual error, please report this issue to the developers from the settings menu.');
-                if (state.activeModalSource === index) {
-                  appendLogLine('✖', 'error', 'If you think this is a unusual error, please report this issue to the developers from the settings menu.');
-                }
-                item.status = 'failed';
-                if (pillEl) {
-                  pillEl.className = 'status-pill failed';
-                  pillEl.textContent = 'failed';
-                }
-              }
-            } else {
-              stepFailure(downloadLine, `Downloading 26AS data: ${data.error}`);
-              rowLog('✖', 'error', 'If you think this is a unusual error, please report this issue to the developers from the settings menu.');
-              if (state.activeModalSource === index) {
-                appendLogLine('✖', 'error', 'If you think this is a unusual error, please report this issue to the developers from the settings menu.');
-              }
-              item.status = 'failed';
-              if (pillEl) {
-                pillEl.className = 'status-pill failed';
-                pillEl.textContent = 'failed';
-              }
-            }
-            } else {
-              stepFailure(redirectLine, `Redirecting to Traces Portal: ${data.error}`);
-              rowLog('✖', 'error', 'If you think this is a unusual error, please report this issue to the developers from the settings menu.');
-              if (state.activeModalSource === index) {
-                appendLogLine('✖', 'error', 'If you think this is a unusual error, please report this issue to the developers from the settings menu.');
-              }
-              item.status = 'failed';
-              if (pillEl) {
-                pillEl.className = 'status-pill failed';
-                pillEl.textContent = 'failed';
-              }
-            }
-          } else {
+
+          if (data.status === 'failed') {
             stepFailure(dualLine, `Handling dual login: ${data.error}`);
-            rowLog('✖', 'error', 'If you think this is a unusual error, please report this issue to the developers from the settings menu.');
+            rowLog('✖', 'error', 'If you think this is a unusual error, please report this issue to the developers.');
             if (state.activeModalSource === index) {
-              appendLogLine('✖', 'error', 'If you think this is a unusual error, please report this issue to the developers from the settings menu.');
+              appendLogLine('✖', 'error', 'If you think this is a unusual error, please report this issue to the developers.');
             }
             item.status = 'failed';
             if (pillEl) {
               pillEl.className = 'status-pill failed';
               pillEl.textContent = 'failed';
             }
+            return;
           }
-        } else {
-          stepFailure(loginLine, `Logging in: ${data.error}`);
-          rowLog('✖', 'error', 'If you think this is a unusual error, please report this issue to the developers from the settings menu.');
+
+          updateRowProgress(85);
+          stepSuccess(dualLine, `Handling dual login`);
+        }
+        
+        // 5. Redirecting to Traces Portal
+        const redirectLine = stepStart(`Redirecting to Traces Portal`);
+        updateRowProgress(90);
+        
+        try {
+          const response = await fetch(`${API_BASE}/api/redirect-to-traces`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ pan: item.pan, ay: item.ay })
+          });
+          if (!response.ok) throw new Error(`HTTP ${response.status}`);
+          data = await response.json();
+        } catch (err) {
+          stepFailure(redirectLine, `Redirecting to Traces Portal: Redirect request failed.`);
+          rowLog('✖', 'error', 'If you think this is a unusual error, please report this issue to the developers.');
           if (state.activeModalSource === index) {
-            appendLogLine('✖', 'error', 'If you think this is a unusual error, please report this issue to the developers from the settings menu.');
+            appendLogLine('✖', 'error', 'If you think this is a unusual error, please report this issue to the developers.');
           }
           item.status = 'failed';
           if (pillEl) {
             pillEl.className = 'status-pill failed';
             pillEl.textContent = 'failed';
           }
+          return;
+        }
+
+        if (data.status === 'failed') {
+          stepFailure(redirectLine, `Redirecting to Traces Portal: ${data.error}`);
+          rowLog('✖', 'error', 'If you think this is a unusual error, please report this issue to the developers.');
+          if (state.activeModalSource === index) {
+            appendLogLine('✖', 'error', 'If you think this is a unusual error, please report this issue to the developers.');
+          }
+          item.status = 'failed';
+          if (pillEl) {
+            pillEl.className = 'status-pill failed';
+            pillEl.textContent = 'failed';
+          }
+          return;
+        }
+
+        updateRowProgress(92);
+        stepSuccess(redirectLine, `Redirecting to Traces Portal`);
+
+        tracesBase = data.tracesBase;
+        assesseeName = data.assesseeName || '';
+        panStatus = data.panStatus || '';
+        address1 = data.address1 || '';
+        address2 = data.address2 || '';
+
+        // Save session state for multi-year reuse
+        state.activeBulkSession = {
+          pan: item.pan,
+          password: item.password,
+          tracesBase: tracesBase,
+          assesseeName: assesseeName,
+          panStatus: panStatus,
+          address1: address1,
+          address2: address2
+        };
+      }
+
+      item.liveTracesBase = tracesBase;
+      
+      // Phase 6: Downloading 26AS Data
+      const downloadLine = stepStart(`Downloading 26AS data (${item.ay})`);
+      updateRowProgress(94);
+      
+      let downloadData;
+      try {
+        const response = await fetch(`${API_BASE}/api/download-26as`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ pan: item.pan, ay: item.ay, tracesBase: item.liveTracesBase })
+        });
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        downloadData = await response.json();
+      } catch (err) {
+        stepFailure(downloadLine, `Downloading 26AS data: Download request failed.`);
+        rowLog('✖', 'error', 'If you think this is a unusual error, please report this issue to the developers.');
+        if (state.activeModalSource === index) {
+          appendLogLine('✖', 'error', 'If you think this is a unusual error, please report this issue to the developers.');
+        }
+        item.status = 'failed';
+        if (pillEl) {
+          pillEl.className = 'status-pill failed';
+          pillEl.textContent = 'failed';
+        }
+        return;
+      }
+      
+      if (downloadData.status === 'failed') {
+        stepFailure(downloadLine, `Downloading 26AS data: ${downloadData.error}`);
+        rowLog('✖', 'error', 'If you think this is a unusual error, please report this issue to the developers.');
+        if (state.activeModalSource === index) {
+          appendLogLine('✖', 'error', 'If you think this is a unusual error, please report this issue to the developers.');
+        }
+        item.status = 'failed';
+        if (pillEl) {
+          pillEl.className = 'status-pill failed';
+          pillEl.textContent = 'failed';
         }
         return;
       }
 
-      // Phase 1: Establishing Connection
-      const connLine = stepStart(`Establishing connection`);
-      updateRowProgress(10);
-      await delay(3200);
-      stepSuccess(connLine, `Establishing connection`);
-
-      // Phase 2: User ID Verification
-      const userLine = stepStart(`User ID verification`);
-      updateRowProgress(25);
-      await delay(6000);
-      stepSuccess(userLine, `User ID verification`);
-
-      // Phase 3: Logging In
-      const loginLine = stepStart(`Logging in`);
-      updateRowProgress(40);
-      await delay(1200);
-
-      // Phase 4: Scenario Checks & Handling Dual Login
-      if (item.pan === 'ERROR1234A') {
-        stepFailure(loginLine, `Logging in`);
-        throw new Error("Invalid password");
-      }
-      
-      if (item.pan === 'AADHA1234C') {
-        stepFailure(loginLine, `Logging in`);
-        throw new Error("Aadhaar linking error");
-      }
-
-      if (item.pan === 'RETRY1234B') {
-        stepSuccess(loginLine, `Logging in`);
-        const dualLine = stepStart(`Handling dual login`);
-        updateRowProgress(45);
-        await delay(4000);
-        stepSuccess(dualLine, `Handling dual login`);
-      } else {
-        stepSuccess(loginLine, `Logging in`);
-        await delay(1000);
-      }
-
-      // Phase 5: Redirecting to Traces Portal
-      const redirectLine = stepStart(`Redirecting to the traces portal`);
-      updateRowProgress(65);
-      await delay(1500);
-      stepSuccess(redirectLine, `Redirecting to the traces portal`);
-
-      // Phase 6: Downloading 26s Data
-      const dlLine = stepStart(`Downloading 26s data`);
-      updateRowProgress(85);
-      await delay(2800);
-      stepSuccess(dlLine, `Downloading 26s data`);
-
-      // Phase 7: Logging Out
-      const logoutLine = stepStart(`Logging out`);
-      updateRowProgress(95);
-      await delay(800);
-      stepSuccess(logoutLine, `Logging out`);
-      updateRowProgress(100);
+      updateRowProgress(96);
+      stepSuccess(downloadLine, `Downloading 26AS data (${item.ay})`);
       
       // Store results
-      const template = MOCK_DATA[item.pan] || MOCK_DATA['DEFAULT'];
-      item.resultData = JSON.parse(JSON.stringify(template));
-      item.resultData.pan = item.pan;
-      item.resultData.assessmentYear = item.ay;
-      
-      // Mark Success
-      item.status = 'success';
-      if (pillEl) {
-        pillEl.className = 'status-pill success';
-        pillEl.textContent = 'success';
+      item.resultData = translateTracesData(downloadData.taxData, item.pan, item.ay);
+      item.resultData.assesseeName = downloadData.assesseeName || assesseeName;
+      item.resultData.panStatus = downloadData.panStatus || panStatus;
+      item.resultData.address1 = downloadData.address1 || address1;
+      item.resultData.address2 = downloadData.address2 || address2;
+      item.resultData.fy = downloadData.fy;
+      item.resultData.ay = item.ay;
+      item.rawTaxData = downloadData.taxData;
+
+      // Check if next pending item in queue is for the SAME PAN
+      const nextPendingItem = state.bulkQueue.find((it, idx) => idx > index && it.status === 'pending');
+      const shouldKeepSession = nextPendingItem && nextPendingItem.pan === item.pan && nextPendingItem.password === item.password;
+
+      if (shouldKeepSession) {
+        // Multi-year flow: Keep session active for the next year
+        item.status = 'success';
+        if (pillEl) {
+          pillEl.className = 'status-pill success';
+          pillEl.textContent = 'success';
+        }
+        const viewBtnEl = document.getElementById(`btn-view-bulk-row-${index}`);
+        if (viewBtnEl) {
+          viewBtnEl.disabled = false;
+        }
+        if (state.selectedBulkViewIndex === index) {
+          renderBulkItemResult(index);
+        }
+        updateRowProgress(100);
+        updateBulkActionsUI();
+        rowLog('✔', 'success', `AY ${item.ay} completed. Session kept active for next year.`);
+      } else {
+        // Last year or only year for this PAN: Perform Phase 7 Logout
+        const logoutLine = stepStart(`Logging out`);
+        updateRowProgress(98);
+        try {
+          const logoutResp = await fetch(`${API_BASE}/api/logout`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ pan: item.pan })
+          });
+          const logoutData = logoutResp.ok ? await logoutResp.json() : { status: 'failed' };
+          if (logoutData.status === 'success') {
+            stepSuccess(logoutLine, `Logging out`);
+            rowLog('✔', 'success', `Logging out`);
+            item.status = 'success';
+            if (pillEl) {
+              pillEl.className = 'status-pill success';
+              pillEl.textContent = 'success';
+            }
+            const viewBtnEl = document.getElementById(`btn-view-bulk-row-${index}`);
+            if (viewBtnEl) {
+              viewBtnEl.disabled = false;
+            }
+            if (state.selectedBulkViewIndex === index) {
+              renderBulkItemResult(index);
+            }
+            updateRowProgress(100);
+            updateBulkActionsUI();
+          } else {
+            throw new Error(logoutData.error || 'Logout failed');
+          }
+        } catch (logoutErr) {
+          stepFailure(logoutLine, `Logging out: ${logoutErr.message}`);
+          rowLog('✖', 'error', 'If you think this is a unusual error, please report this issue to the developers.');
+          if (state.activeModalSource === index) {
+            appendLogLine('✖', 'error', 'If you think this is a unusual error, please report this issue to the developers.');
+          }
+          item.status = 'failed';
+          if (pillEl) {
+            pillEl.className = 'status-pill failed';
+            pillEl.textContent = 'failed';
+          }
+        } finally {
+          state.activeBulkSession = null;
+        }
       }
-      
-      // Update bulk action buttons status
-      updateBulkActionsUI();
-      
-      rowLog('✔', 'success', `[Thread-${index}] Tasks cached.`);
 
     } catch (err) {
       item.status = 'failed';
@@ -3087,5 +3075,17 @@ XYZAB5678Q, pass1234, 2024-25`;
   
   // Initialize pan input
   panInput.value = '';
+
+  // Startup check on load / refresh: Show toast notification if extension is offline
+  setTimeout(() => {
+    checkExtension((isConnected) => {
+      if (!isConnected) {
+        showToast(
+          "PDF Downloader Helper Offline",
+          "Please load the helper extension in Developer Mode to download your Form 26AS as a PDF. Without it, PDF downloads will not work."
+        );
+      }
+    });
+  }, 600);
 
 });

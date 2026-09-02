@@ -2,8 +2,10 @@
 import asyncio
 import base64
 import logging
+import os
 import re
 import time
+import uuid
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from typing import Optional
@@ -11,17 +13,19 @@ from pydantic import BaseModel, Field
 import httpx
 from helper import handle_error
 
-file_name = "log.txt"
+# Auto-load .env file if present in workspace (standard library, zero external dependency)
+_env_path = os.path.join(os.path.dirname(__file__), ".env")
+if os.path.exists(_env_path):
+    with open(_env_path, "r", encoding="utf-8") as _f:
+        for _line in _f:
+            _line = _line.strip()
+            if _line and not _line.startswith("#") and "=" in _line:
+                _k, _v = _line.split("=", 1)
+                os.environ.setdefault(_k.strip(), _v.strip().strip('"').strip("'"))
 
-def overwrite_log_file():
-    """Overwrite the log file with a header indicating a new session."""
-    with open(file_name, "w") as f:
-        f.write("=== New Session Started ===\n")
-
-def append_to_log_file(message: str):
-    """Append a message to the log file."""
-    with open(file_name, "a") as f:
-        f.write(f"{message}\n")
+# Supabase Telemetry Configuration (Backend-Only, never exposed to client)
+SUPABASE_URL = os.environ.get("SUPABASE_URL", "").strip().rstrip("/")
+SUPABASE_KEY = os.environ.get("SUPABASE_KEY", "").strip()
 
 # Set up clean logging
 logging.basicConfig(
@@ -102,20 +106,72 @@ class LogoutRequest(BaseModel):
     pan: str = Field(..., min_length=1, max_length=16, description="PAN (up to 16 characters)")
 
 
-def validate_pan(pan: str) -> bool:
-    """PAN format validator: 5 letters, 4 digits, 1 letter."""
-    if len(pan) > 16:
+def validate_user_id(user_id: str) -> bool:
+    """UserID format validator: 1-16 characters."""
+    if len(user_id) > 16:
         return False
     return True
 
 
-# --- Session Client Registry ---
+# --- Session Client Registry & Telemetry Tracking ---
 active_sessions = {}
 active_profiles = {}
+pan_session_metrics = {}
 # Tracks PANs that are currently mid-flow (connect → logout).
 # Prevents the same PAN from being processed by two concurrent flows
 # simultaneously (which would share and corrupt the same cookie jar).
 processing_pans: set = set()
+
+async def _send_supabase_log(is_success: bool, duration_sec: float):
+    """
+    Asynchronously updates the single summary row (ID = 1) in Supabase.
+    Calls atomic PostgreSQL RPC function record_execution_metric.
+    Completely non-blocking and fail-safe.
+    """
+    if not SUPABASE_URL or not SUPABASE_KEY:
+        return  # Telemetry disabled until credentials are provided in .env
+
+    target_url = f"{SUPABASE_URL}/rest/v1/rpc/record_execution_metric"
+    headers = {
+        "apikey": SUPABASE_KEY,
+        "Authorization": f"Bearer {SUPABASE_KEY}",
+        "Content-Type": "application/json"
+    }
+    payload = {
+        "is_success": is_success,
+        "duration_sec": duration_sec
+    }
+
+    try:
+        async with httpx.AsyncClient(timeout=6.0) as http_client:
+            res = await http_client.post(target_url, headers=headers, json=payload)
+            if res.status_code >= 400:
+                logger.warning(f"Supabase telemetry returned HTTP {res.status_code}: {res.text}")
+    except Exception as e:
+        logger.warning(f"Supabase telemetry request failed silently: {e}")
+
+def record_session_metric(pan: str, is_success: bool, direct_duration: float = None):
+    """
+    Computes elapsed verification time from session start to completion,
+    and schedules a background task to update the single summary row (ID = 1).
+    Handles both full login cycles and fast multi-year reused session downloads.
+    """
+    pan = pan.upper()
+    metric_data = pan_session_metrics.pop(pan, None)
+    start_time = metric_data.get("start_time") if metric_data else None
+    
+    if start_time:
+        elapsed_seconds = round(time.time() - start_time, 2)
+    elif direct_duration is not None and direct_duration > 0:
+        elapsed_seconds = round(direct_duration, 2)
+    else:
+        elapsed_seconds = 0.85
+    
+    try:
+        loop = asyncio.get_running_loop()
+        loop.create_task(_send_supabase_log(is_success, elapsed_seconds))
+    except RuntimeError:
+        pass
 
 def get_pan_lock_info(pan: str) -> bool:
     """Returns True if PAN is already being processed."""
@@ -135,12 +191,13 @@ async def close_session(pan: str):
         await client.aclose()
     if pan in active_profiles:
         active_profiles.pop(pan)
+    pan_session_metrics.pop(pan, None)
 
 
 # --- Async Phase Executors ---
 async def execute_phase1_connect(client: httpx.AsyncClient, pan: str) -> dict:
     pan = pan.upper()
-    if not validate_pan(pan):
+    if not validate_user_id(pan):
         return {
             "pan": pan,
             "status": "failed",
@@ -151,9 +208,6 @@ async def execute_phase1_connect(client: httpx.AsyncClient, pan: str) -> dict:
     try:
         response = await client.get(FOSERVICES_URL, timeout=15.0)
         response.raise_for_status()
-        overwrite_log_file()
-        append_to_log_file(f"[{pan}] Phase 1 success.")
-        append_to_log_file(f"Status Code: {response.status_code}")
         
         # Mandatory 2.0s cooldown delay
         logger.info(f"[{pan}] Phase 1 success. Cooldown delay (2.0s)...")
@@ -163,11 +217,9 @@ async def execute_phase1_connect(client: httpx.AsyncClient, pan: str) -> dict:
             "status": "success"
         }
     except httpx.HTTPStatusError as e:
-        append_to_log_file(f"[{pan}] Phase 1 failed with status code {e.response.status_code}")
         logger.error(f"[{pan}] Phase 1 HTTP failed: {e}")
         return handle_error(pan, "Establishing Connection Phase", response=e.response)
     except Exception as e:
-        append_to_log_file(f"[{pan}] Phase 1 failed: {e}")
         logger.error(f"[{pan}] Phase 1 failed: {e}")
         return handle_error(pan, "Establishing Connection Phase", exception=e)
 
@@ -194,7 +246,6 @@ async def execute_phase2_verify(client: httpx.AsyncClient, pan: str) -> dict:
         )
         response.raise_for_status()
         res_json = response.json()
-        append_to_log_file(f"[{pan}] Phase 2 response: {res_json}")
 
         req_id = res_json.get("reqId")
         sec_msg = res_json.get("secAccssMsg")
@@ -215,11 +266,9 @@ async def execute_phase2_verify(client: httpx.AsyncClient, pan: str) -> dict:
         }
 
     except httpx.HTTPStatusError as e:
-        append_to_log_file(f"[{pan}] Phase 2 failed with HTTP status error: {e}")
         logger.error(f"[{pan}] Phase 2 HTTP failed: {e}")
         return handle_error(pan, "User ID Verification Phase", response=e.response)
     except Exception as e:
-        append_to_log_file(f"[{pan}] Phase 2 failed: {e}")
         logger.error(f"[{pan}] Phase 2 failed: {e}")
         return handle_error(pan, "User ID Verification Phase", exception=e)
 
@@ -263,7 +312,6 @@ async def execute_phase3_login(client: httpx.AsyncClient, pan: str, password: st
         )
         response.raise_for_status()
         res_json = response.json()
-        append_to_log_file(f"[{pan}] Phase 3 response: {res_json}")
 
         messages = res_json.get("messages", [])
         is_dual_login = False
@@ -297,11 +345,9 @@ async def execute_phase3_login(client: httpx.AsyncClient, pan: str, password: st
         }
 
     except httpx.HTTPStatusError as e:
-        append_to_log_file(f"[{pan}] Phase 3 failed with HTTP status error: {e}")
         logger.error(f"[{pan}] Phase 3 HTTP failed: {e}")
         return handle_error(pan, "Logging In Phase", response=e.response)
     except Exception as e:
-        append_to_log_file(f"[{pan}] Phase 3 failed: {e}")
         logger.error(f"[{pan}] Phase 3 failed: {e}")
         return handle_error(pan, "Logging In Phase", exception=e)
 
@@ -339,7 +385,6 @@ async def execute_phase4_dual_login(client: httpx.AsyncClient, pan: str, origina
         )
         response.raise_for_status()
         res_json = response.json()
-        append_to_log_file(f"[{pan}] Phase 4 response: {res_json}")
         
         # Check for error codes
         messages = res_json.get("messages", [])
@@ -357,11 +402,9 @@ async def execute_phase4_dual_login(client: httpx.AsyncClient, pan: str, origina
         }
         
     except httpx.HTTPStatusError as e:
-        append_to_log_file(f"[{pan}] Phase 4 failed with HTTP status error: {e}")
         logger.error(f"[{pan}] Phase 4 HTTP failed: {e}")
         return handle_error(pan, "Handling Dual Login Phase", response=e.response)
     except Exception as e:
-        append_to_log_file(f"[{pan}] Phase 4 failed: {e}")
         logger.error(f"[{pan}] Phase 4 failed: {e}")
         return handle_error(pan, "Handling Dual Login Phase", exception=e)
 
@@ -393,7 +436,6 @@ async def execute_phase5_redirect(client: httpx.AsyncClient, pan: str, ay: str) 
         )
         response.raise_for_status()
         res_json = response.json()
-        append_to_log_file(f"[{pan}] Phase 5 redirectionView26AS response: {res_json}")
         
         sig_data = res_json.get("data")
         signature = res_json.get("signature")
@@ -403,11 +445,9 @@ async def execute_phase5_redirect(client: httpx.AsyncClient, pan: str, ay: str) 
             return handle_error(pan, "Redirecting to Traces Portal Phase", response=response)
             
     except httpx.HTTPStatusError as e:
-        append_to_log_file(f"[{pan}] Phase 5 redirection signature failed with HTTP status error: {e}")
         logger.error(f"[{pan}] Phase 5 signature HTTP failed: {e}")
         return handle_error(pan, "Redirecting to Traces Portal Phase", response=e.response)
     except Exception as e:
-        append_to_log_file(f"[{pan}] Phase 5 signature failed: {e}")
         logger.error(f"[{pan}] Phase 5 signature failed: {e}")
         return handle_error(pan, "Redirecting to Traces Portal Phase", exception=e)
 
@@ -433,7 +473,6 @@ async def execute_phase5_redirect(client: httpx.AsyncClient, pan: str, ay: str) 
             headers=headers1,
             timeout=15.0
         )
-        append_to_log_file(f"[{pan}] Phase 5 POST 1 status: {res_step4.status_code}")
         
         # Request 4.2: POST to traces dynamic target (307 Redirect)
         if res_step4.status_code == 307:
@@ -449,7 +488,6 @@ async def execute_phase5_redirect(client: httpx.AsyncClient, pan: str, ay: str) 
                 headers=headers2,
                 timeout=15.0
             )
-            append_to_log_file(f"[{pan}] Phase 5 POST 2 status: {res_step4.status_code}")
             
         # Request 4.3: GET to welcome landing (302 or 307 Redirect)
         if res_step4.status_code in [302, 307]:
@@ -464,7 +502,6 @@ async def execute_phase5_redirect(client: httpx.AsyncClient, pan: str, ay: str) 
                 headers=headers3,
                 timeout=15.0
             )
-            append_to_log_file(f"[{pan}] Phase 5 GET 1 status: {res_step4.status_code}")
             
         # Request 4.4: Final GET welcome landing (307 SSL Upgrade Redirect)
         if res_step4.status_code in [302, 307]:
@@ -479,7 +516,6 @@ async def execute_phase5_redirect(client: httpx.AsyncClient, pan: str, ay: str) 
                 follow_redirects=True,
                 timeout=15.0
             )
-            append_to_log_file(f"[{pan}] Phase 5 GET 2 final url: {res_step4.url}")
 
         final_url_str = str(res_step4.url)
         if "autherror" in final_url_str:
@@ -504,7 +540,6 @@ async def execute_phase5_redirect(client: httpx.AsyncClient, pan: str, ay: str) 
             },
             timeout=15.0
         )
-        append_to_log_file(f"[{pan}] Phase 5 final initialize status: {res_step5.status_code}")
         
         if res_step5.status_code != 200:
             logger.error(f"[{pan}] Phase 5 page initialize failed: status {res_step5.status_code}")
@@ -546,11 +581,9 @@ async def execute_phase5_redirect(client: httpx.AsyncClient, pan: str, ay: str) 
         }
 
     except httpx.HTTPStatusError as e:
-        append_to_log_file(f"[{pan}] Phase 5 manual redirect failed with HTTP status error: {e}")
         logger.error(f"[{pan}] Phase 5 redirect HTTP failed: {e}")
         return handle_error(pan, "Redirecting to Traces Portal Phase", response=e.response)
     except Exception as e:
-        append_to_log_file(f"[{pan}] Phase 5 manual redirect failed: {e}")
         logger.error(f"[{pan}] Phase 5 redirect failed: {e}")
         return handle_error(pan, "Redirecting to Traces Portal Phase", exception=e)
 
@@ -578,7 +611,6 @@ async def execute_phase6_download(client: httpx.AsyncClient, pan: str, ay: str, 
             timeout=15.0
         )
         response_ts.raise_for_status()
-        append_to_log_file(f"[{pan}] Phase 6 Step 6 timestamp response: {response_ts.text}")
     except Exception as e:
         logger.error(f"[{pan}] Phase 6 Step 6 failed: {e}")
         return handle_error(pan, "Downloading 26AS Data Phase", exception=e)
@@ -605,7 +637,6 @@ async def execute_phase6_download(client: httpx.AsyncClient, pan: str, ay: str, 
         )
         response_data.raise_for_status()
         tax_json = response_data.json()
-        append_to_log_file(f"[{pan}] Phase 6 Step 7 JSON tables response: Received valid JSON data.")
     except Exception as e:
         logger.error(f"[{pan}] Phase 6 Step 7 failed: {e}")
         return handle_error(pan, "Downloading 26AS Data Phase", exception=e)
@@ -627,7 +658,6 @@ async def execute_phase6_download(client: httpx.AsyncClient, pan: str, ay: str, 
             },
             timeout=15.0
         )
-        append_to_log_file(f"[{pan}] Phase 6 Step 8 Audit complete (Status: {res_step8.status_code})")
         logger.info(f"[{pan}] Phase 6 Step 8 Audit complete.")
     except Exception as e:
         logger.warning(f"[{pan}] Phase 6 Step 8 failed: {e}. Proceeding as it is non-blocking.")
@@ -679,11 +709,9 @@ async def execute_phase7_logout(client: httpx.AsyncClient, pan: str) -> dict:
         )
         response.raise_for_status()
         res_json = response.json()
-        append_to_log_file(f"[{pan}] Phase 7 logout response: {res_json}")
         logger.info(f"[{pan}] Phase 7: Logout successful.")
     except Exception as e:
         logger.warning(f"[{pan}] Phase 7 logout request failed: {e}. Proceeding with session closure.")
-        append_to_log_file(f"[{pan}] Phase 7 logout request failed: {e}")
         
     # Always clean up the session client
     await close_session(pan)
@@ -699,18 +727,20 @@ from fastapi import Response
 @app.post("/api/connect")
 async def connect_endpoint(req: ConnectRequest, response: Response):
     pan = req.pan.upper()
-    # Reject if this PAN is already mid-flow in another request
+    # If this PAN had an ongoing or cancelled/stale session, gracefully close and reset it
     if pan in processing_pans:
-        response.status_code = 409
-        return {
-            "pan": pan,
-            "status": "failed",
-            "error": f"PAN {pan} is already being processed. Wait for the current retrieval to finish before starting another."
-        }
+        logger.info(f"[{pan}] Resetting previous session to initiate fresh connection...")
+        await close_session(pan)
     processing_pans.add(pan)
+    # Start tracking session execution duration
+    pan_session_metrics[pan] = {
+        "start_time": time.time(),
+        "session_id": f"sess_{uuid.uuid4().hex[:12]}"
+    }
     client = get_session_client(pan)
     result = await execute_phase1_connect(client, pan)
     if result.get("status") == "failed":
+        record_session_metric(pan, is_success=False)
         await close_session(pan)
     return result
 
@@ -720,6 +750,7 @@ async def verify_user_endpoint(req: VerifyUserRequest):
     client = get_session_client(req.pan)
     result = await execute_phase2_verify(client, req.pan)
     if result.get("status") == "failed":
+        record_session_metric(req.pan, is_success=False)
         await close_session(req.pan)
     return result
 
@@ -729,6 +760,7 @@ async def login_endpoint(req: LoginRequest):
     client = get_session_client(req.pan)
     result = await execute_phase3_login(client, req.pan, req.password, req.reqId, req.secAccssMsg, req.entityType)
     if result.get("status") == "failed":
+        record_session_metric(req.pan, is_success=False)
         await close_session(req.pan)
     return result
 
@@ -738,6 +770,7 @@ async def handle_dual_login_endpoint(req: DualLoginRequest):
     client = get_session_client(req.pan)
     result = await execute_phase4_dual_login(client, req.pan, req.originalResponse)
     if result.get("status") == "failed":
+        record_session_metric(req.pan, is_success=False)
         await close_session(req.pan)
     return result
 
@@ -747,16 +780,23 @@ async def redirect_to_traces_endpoint(req: RedirectRequest):
     client = get_session_client(req.pan)
     result = await execute_phase5_redirect(client, req.pan, req.ay)
     if result.get("status") == "failed":
+        record_session_metric(req.pan, is_success=False)
         await close_session(req.pan)
     return result
 
 
 @app.post("/api/download-26as")
 async def download_26as_endpoint(req: DownloadRequest):
+    t0 = time.time()
     client = get_session_client(req.pan)
     result = await execute_phase6_download(client, req.pan, req.ay, req.tracesBase)
+    req_duration = round(time.time() - t0, 2)
     if result.get("status") == "failed":
+        record_session_metric(req.pan, is_success=False, direct_duration=req_duration)
         await close_session(req.pan)
+    else:
+        # Record successful completion metric with actual elapsed seconds
+        record_session_metric(req.pan, is_success=True, direct_duration=req_duration)
     return result
 
 

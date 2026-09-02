@@ -38,10 +38,31 @@
       </div>
       
       <div class="header-actions">
+        <!-- Extension Helper Capsule -->
+        <div class="extension-helper-group" id="extension-helper-group">
+          <span class="extension-helper-text">PDF Download Helper:</span>
+          <a href="https://drive.google.com/drive/folders/10cir9lXk3I1W7rQluqE8gBYDXbNeTKY_?usp=sharing" target="_blank" class="primary-button size-sm download-extension-btn" style="text-decoration: none; display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; font-size: 0.72rem; height: 26px;" title="Download Companion Chrome Extension (ZIP)">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" width="12" height="12">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+              <polyline points="7 10 12 15 17 10"></polyline>
+              <line x1="12" y1="15" x2="12" y2="3"></line>
+            </svg>
+            Get Extension
+          </a>
+        </div>
+
+        <!-- Check Extension Connection Button (Visible only when offline) -->
+        <button id="btn-check-extension" class="secondary-button size-sm" style="display: none; align-items: center; gap: 6px; padding: 4px 10px; font-size: 0.72rem; height: 26px;" title="Check Extension Connection">
+          <svg id="icon-check-extension" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="12" height="12">
+            <path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/>
+          </svg>
+          Check Connection
+        </button>
+
         <!-- Connection Status Indicator -->
-        <div class="connection-badge">
-          <span class="pulse-dot"></span>
-          <span class="status-text">TRACES API: Connected</span>
+        <div class="connection-badge online" id="extension-status-badge">
+          <span class="pulse-dot" id="extension-pulse-dot"></span>
+          <span class="status-text" id="extension-status-text">Extension: Connected</span>
         </div>
         
         <!-- Theme Toggle Button -->
@@ -171,16 +192,6 @@
                 </svg>
               </button>
             </form>
-
-            <div class="quick-test-section">
-              <h4>Quick Test Scenarios:</h4>
-              <div class="quick-test-badges">
-                <button class="test-badge success" data-pan="ABCDE1234F" data-pass="Secret123">ABCDE1234F (Success)</button>
-                <button class="test-badge retry" data-pan="RETRY1234B" data-pass="Secure99">RETRY1234B (Retry Event)</button>
-                <button class="test-badge error" data-pan="ERROR1234A" data-pass="WrongPass">ERROR1234A (Wrong Pass)</button>
-                <button class="test-badge error" data-pan="AADHA1234C" data-pass="LinkError">AADHA1234C (Aadhaar Err)</button>
-              </div>
-            </div>
           </div>
 
           <!-- Results Dashboard Card -->
@@ -400,7 +411,6 @@
                 <label for="bulk-text-input">Alternative: Paste PAN Credentials</label>
                 <textarea id="bulk-text-input" placeholder="Enter one record per line in format:&#10;PAN, Password, AssessmentYear&#10;&#10;Example:&#10;ABCDE1234F, Secret123, 2026-27&#10;RETRY1234B, Secure99, 2025-26&#10;ERROR1234A, WrongPass, 2026-27"></textarea>
                 <div class="textarea-actions">
-                  <button id="load-sample-bulk-btn" class="secondary-button size-sm">Load Demo Records</button>
                   <button id="parse-bulk-btn" class="primary-button size-sm">Parse & Load Queue</button>
                 </div>
               </div>
@@ -448,6 +458,156 @@
             </div>
           </div>
 
+          <!-- Dedicated Bulk Form 26AS Statement Result Card -->
+          <div class="glass-card panel-right-card hidden" id="bulk-result-card" style="margin-bottom: 20px;">
+            <div class="results-data-container fade-in" id="bulk-result-data-state">
+              <div class="data-header">
+                <div>
+                  <h3 id="bulk-result-pan-title">PAN: -</h3>
+                  <p id="bulk-result-meta-title">Assessment Year: - | Financial Year: -</p>
+                </div>
+                <div class="data-actions">
+                  <button id="bulk-download-json" class="secondary-button size-sm" title="Download Form 26AS JSON">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
+                      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                      <polyline points="7 10 12 15 17 10"></polyline>
+                      <line x1="12" y1="15" x2="12" y2="3"></line>
+                    </svg>
+                    JSON
+                  </button>
+                  <button id="bulk-download-pdf" class="secondary-button size-sm" title="Download Form 26AS PDF">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
+                      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                      <polyline points="7 10 12 15 17 10"></polyline>
+                      <line x1="12" y1="15" x2="12" y2="3"></line>
+                    </svg>
+                    Print PDF
+                  </button>
+                  <button id="bulk-result-close-btn" class="icon-button" title="Close Details" style="margin-left: 8px; width: 32px; height: 32px; display: inline-flex; align-items: center; justify-content: center;">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
+                      <line x1="18" y1="6" x2="6" y2="18"></line>
+                      <line x1="6" y1="6" x2="18" y2="18"></line>
+                    </svg>
+                  </button>
+                </div>
+              </div>
+
+              <!-- Summary Cards Grid -->
+              <div class="stats-grid">
+                <div class="stat-card glass-card">
+                  <span class="stat-label">Total TDS (Part A)</span>
+                  <span class="stat-value" id="bulk-sum-tds">₹0.00</span>
+                  <div class="stat-indicator pos">Tax Deducted</div>
+                </div>
+                <div class="stat-card glass-card">
+                  <span class="stat-label">Total TCS (Part B)</span>
+                  <span class="stat-value" id="bulk-sum-tcs">₹0.00</span>
+                  <div class="stat-indicator pos">Tax Collected</div>
+                </div>
+                <div class="stat-card glass-card">
+                  <span class="stat-label">Tax Paid (Part C)</span>
+                  <span class="stat-value" id="bulk-sum-paid">₹0.00</span>
+                  <div class="stat-indicator neutral">Advance / Self-Ass.</div>
+                </div>
+                <div class="stat-card glass-card highlighting">
+                  <span class="stat-label">Total Refund (Part D)</span>
+                  <span class="stat-value text-accent" id="bulk-sum-refund">₹0.00</span>
+                  <div class="stat-indicator neg">Refund Issued</div>
+                </div>
+              </div>
+
+              <!-- Subsection Tabs for Tables -->
+              <div class="sub-tabs-container">
+                <button class="sub-tab-btn active bulk-sub-tab-btn" data-subtab="bulk-part-a">Part A (TDS)</button>
+                <button class="sub-tab-btn bulk-sub-tab-btn" data-subtab="bulk-part-b">Part B (TCS)</button>
+                <button class="sub-tab-btn bulk-sub-tab-btn" data-subtab="bulk-part-c">Part C (Tax Paid)</button>
+                <button class="sub-tab-btn bulk-sub-tab-btn" data-subtab="bulk-part-d">Part D (Refunds)</button>
+              </div>
+
+              <!-- Sub-tab Viewports -->
+              <div class="sub-viewport scrollable-table-container">
+                <!-- Part A Table -->
+                <div class="sub-panel active" id="sub-panel-bulk-part-a">
+                  <table class="data-table">
+                    <thead>
+                      <tr>
+                        <th>Sr.</th>
+                        <th>Deductor TAN</th>
+                        <th>Deductor Name</th>
+                        <th class="num">Amount Credited</th>
+                        <th class="num">Tax Deducted</th>
+                        <th class="num">Tax Deposited</th>
+                      </tr>
+                    </thead>
+                    <tbody id="bulk-table-part-a-body">
+                      <!-- Rendered Dynamically -->
+                    </tbody>
+                  </table>
+                  <div class="empty-table-msg hidden" id="bulk-empty-part-a">No TDS records found for this period.</div>
+                </div>
+
+                <!-- Part B Table -->
+                <div class="sub-panel" id="sub-panel-bulk-part-b">
+                  <table class="data-table">
+                    <thead>
+                      <tr>
+                        <th>Sr.</th>
+                        <th>Collector TAN</th>
+                        <th>Collector Name</th>
+                        <th class="num">Amount Debited</th>
+                        <th class="num">Tax Collected</th>
+                        <th class="num">Tax Deposited</th>
+                      </tr>
+                    </thead>
+                    <tbody id="bulk-table-part-b-body">
+                      <!-- Rendered Dynamically -->
+                    </tbody>
+                  </table>
+                  <div class="empty-table-msg hidden" id="bulk-empty-part-b">No TCS records found for this period.</div>
+                </div>
+
+                <!-- Part C Table -->
+                <div class="sub-panel" id="sub-panel-bulk-part-c">
+                  <table class="data-table">
+                    <thead>
+                      <tr>
+                        <th>Sr.</th>
+                        <th>BSR Code</th>
+                        <th>Date of Deposit</th>
+                        <th>Challan Serial</th>
+                        <th class="num">Tax Paid</th>
+                      </tr>
+                    </thead>
+                    <tbody id="bulk-table-part-c-body">
+                      <!-- Rendered Dynamically -->
+                    </tbody>
+                  </table>
+                  <div class="empty-table-msg hidden" id="bulk-empty-part-c">No Tax Payment (Advance / Self-Assessment) records found.</div>
+                </div>
+
+                <!-- Part D Table -->
+                <div class="sub-panel" id="sub-panel-bulk-part-d">
+                  <table class="data-table">
+                    <thead>
+                      <tr>
+                        <th>Sr.</th>
+                        <th>Assessment Year</th>
+                        <th>Mode of Payment</th>
+                        <th class="num">Refund Issued</th>
+                        <th class="num">Interest</th>
+                        <th>Date of Payment</th>
+                      </tr>
+                    </thead>
+                    <tbody id="bulk-table-part-d-body">
+                      <!-- Rendered Dynamically -->
+                    </tbody>
+                  </table>
+                  <div class="empty-table-msg hidden" id="bulk-empty-part-d">No Tax Refunds recorded for this period.</div>
+                </div>
+              </div>
+            </div>
+          </div>
+
           <!-- Bulk Progress Table -->
           <div class="glass-card bulk-table-card hidden" id="bulk-table-panel">
             <div class="card-header">
@@ -465,6 +625,7 @@
                     <th>Assessment Year</th>
                     <th>Status</th>
                     <th>Progress Indicator</th>
+                    <th style="text-align: center; width: 100px;">Actions</th>
                   </tr>
                 </thead>
                 <tbody id="bulk-queue-body">
@@ -485,37 +646,30 @@
 
     </main>
 
-    <!-- Bottom Stats Bar (Retained session metrics as requested) -->
-    <section class="app-stats-bar glass-card">
-      <div class="stat-bar-item">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="stat-bar-icon">
-          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-          <polyline points="7 10 12 15 17 10"></polyline>
-          <line x1="12" y1="15" x2="12" y2="3"></line>
+    <!-- Trust & Security Assurance Banner -->
+    <section class="trust-security-bar glass-card">
+      <div class="trust-item">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="trust-icon" style="color: var(--color-accent);">
+          <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+          <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
         </svg>
-        <span>TOTAL DOWNLOADED: <strong id="stats-total">0</strong></span>
+        <span>Direct TRACES Gateway</span>
       </div>
-      <div class="stat-bar-item">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="stat-bar-icon text-success">
-          <circle cx="12" cy="12" r="10"></circle>
-          <polyline points="22 4 12 14.01 9 11.01"></polyline>
+      <div class="trust-divider">•</div>
+      <div class="trust-item">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="trust-icon" style="color: var(--color-success);">
+          <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
         </svg>
-        <span>SUCCESSFUL: <strong id="stats-success" class="text-success">0</strong></span>
+        <span>Zero Credentials Stored</span>
       </div>
-      <div class="stat-bar-item">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="stat-bar-icon text-danger">
-          <circle cx="12" cy="12" r="10"></circle>
-          <line x1="15" y1="9" x2="9" y2="15"></line>
-          <line x1="9" y1="9" x2="15" y2="15"></line>
+      <div class="trust-divider">•</div>
+      <div class="trust-item">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="trust-icon" style="color: #60a5fa;">
+          <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path>
+          <polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline>
+          <line x1="12" y1="22.08" x2="12" y2="12"></line>
         </svg>
-        <span>FAILED: <strong id="stats-failed" class="text-danger">0</strong></span>
-      </div>
-      <div class="stat-bar-item">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="stat-bar-icon text-primary">
-          <circle cx="12" cy="12" r="10"></circle>
-          <polyline points="12 6 12 12 16 14"></polyline>
-        </svg>
-        <span>AVG LATENCY: <strong id="stats-latency">0 MS</strong></span>
+        <span>Zero Data Stored</span>
       </div>
     </section>
 
@@ -525,7 +679,7 @@
         <span class="engine-dot"></span>
         <span>26AS Downloader Engine</span>
         <span class="footer-separator">|</span>
-        <span class="developer-credits">Developed by <a href="https://www.linkedin.com/in/chetan-gujar/" target="_blank">Chetan Gujar</a> &amp; <a href="https://www.linkedin.com/in/rupeshdangodra/" target="_blank">Rupesh Dangodra</a></span>
+        <span class="developer-credits">Brought to you with ❤️ by <a href="https://www.linkedin.com/in/rupeshdangodra/" target="_blank">Rupesh Dangodra</a>, <a href="https://www.linkedin.com/in/chetan-gujar/" target="_blank">Chetan Gujar</a> &amp; <a href="https://www.linkedin.com/in/luhar-vinayak-3bab05285/" target="_blank">Vinayak Luhar</a></span>
       </div>
       <div class="disclaimer-text-right">
         Retrieval sessions are powered by the e-Filing API endpoints. This utility downloader tool is independent and not affiliated with the Income Tax Department of India, ITCOMTECH, or any governmental portal.
@@ -583,6 +737,9 @@
       </div>
     </div>
   </div>
+
+  <!-- Toast Notification Container -->
+  <div id="toast-container" class="toast-container"></div>
 
   <!-- Application Logic -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
