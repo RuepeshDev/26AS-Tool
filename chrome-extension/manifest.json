@@ -1,9 +1,14 @@
 {
   "manifest_version": 3,
   "name": "Form 26AS PDF Exporter Companion",
-  "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAzoK6rSjZC8f15+oQoIREeHmK2dF1DDlDT91NWM47ZGyk+WseUqQWgo2XUg4NGgJhDUpYYre8Lr/uqAWZ+21OSjxfHX+wazz3phdjSoSLJRXJkkpJkWW0UWTanqWsmTdVLJDilz7NT7W83dzK2uugS7Oxu4JtQTZZSPAtDCE1iKcoZzRtWwYsQfVs7c9qwfUsCIuPlcWGIicz6tkxZXu60BG2S5hCyS0yQ0IF+9a4pbe/xj7iC54lpkkzhHV2CM97vXMZfQWPAXwKv/cqXeDuOpsuYGZD9oEl5t8yzFvUN9X2R77tqthSswuyYm1ss3haERvo6Qt/it3ZweR2+9amsQIDAQAB",
   "version": "1.0.0",
   "description": "Companion extension to securely download Form 26AS PDFs locally.",
+  "icons": {
+    "16": "assets/icon16.png",
+    "32": "assets/icon32.png",
+    "48": "assets/icon48.png",
+    "128": "assets/icon128.png"
+  },
   "permissions": [
     "downloads",
     "offscreen"
@@ -16,7 +21,8 @@
       "http://localhost/*",
       "http://127.0.0.1/*",
       "https://*.ngrok-free.dev/*",
-      "https://your-deployed-website.com/*"
+      "https://your-deployed-website.com/*",
+      "https://two6as-tool.onrender.com/*"
     ]
   },
   "content_security_policy": {
