@@ -71,13 +71,28 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true;
   }
 
+let pendingFilenameMap = {};
+
+if (chrome.downloads && chrome.downloads.onDeterminingFilename) {
+  chrome.downloads.onDeterminingFilename.addListener((item, suggest) => {
+    if (pendingFilenameMap[item.id]) {
+      suggest({ filename: pendingFilenameMap[item.id], conflictAction: 'uniquify' });
+      delete pendingFilenameMap[item.id];
+    }
+  });
+}
+
   if (message.action === "TRIGGER_DOWNLOAD") {
     const dataUrl = `data:application/pdf;base64,${message.data}`;
+    const targetFilename = message.filename || "Form26AS.pdf";
     chrome.downloads.download({
       url: dataUrl,
-      filename: message.filename,
+      filename: targetFilename,
       saveAs: false
-    }, () => {
+    }, (downloadId) => {
+      if (downloadId && targetFilename) {
+        pendingFilenameMap[downloadId] = targetFilename;
+      }
       chrome.offscreen.closeDocument().catch(() => {});
     });
     return true;

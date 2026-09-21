@@ -15,10 +15,10 @@
       window.pdfMake.createPdf = function(docDefinition) {
         const pdfDoc = originalCreatePdf.call(window.pdfMake, docDefinition);
         pdfDoc.download = function(fileName) {
-          // Construct custom filename: 26_pan_assessment_year
+          // Construct custom filename: Form26AS_PAN_AYYYYY-YY.pdf
           const cleanPan = (currentPan || "").trim().toUpperCase();
           const cleanAY = (currentAY || "").trim();
-          const customFileName = `26_${cleanPan}_${cleanAY}.pdf`;
+          const customFileName = `Form26AS_${cleanPan}_AY${cleanAY}.pdf`;
 
           pdfDoc.getBase64((base64Data) => {
             window.parent.postMessage({
