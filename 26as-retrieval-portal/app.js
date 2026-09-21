@@ -214,8 +214,8 @@ document.addEventListener('DOMContentLoaded', () => {
         <div class="toast-description">
           ${description}
           <br>
-          <a href="https://drive.google.com/drive/folders/10cir9lXk3I1W7rQluqE8gBYDXbNeTKY_?usp=sharing" target="_blank" class="toast-action-link" style="display: inline-flex; align-items: center; gap: 4px; margin-top: 8px; color: var(--color-warning); font-weight: 700; text-decoration: none; font-size: 0.75rem;">
-            Download Helper ZIP ➔
+          <a href="https://chromewebstore.google.com/detail/plopmjkkkoppegjbndgbgenndfjmgkim?utm_source=item-share-cb" target="_blank" class="toast-action-link" style="display: inline-flex; align-items: center; gap: 4px; margin-top: 8px; color: var(--color-warning); font-weight: 700; text-decoration: none; font-size: 0.75rem;">
+            Add to Chrome from Web Store ➔
           </a>
         </div>
       </div>
@@ -273,7 +273,7 @@ document.addEventListener('DOMContentLoaded', () => {
   document.body.classList.add('palette-blue');
 
   // Chrome Extension Identification for Local Exporter
-  const EXTENSION_ID = 'bdbfbimncembaafobijknhndklpidkki';
+  const EXTENSION_ID = 'plopmjkkkoppegjbndgbgenndfjmgkim';
 
   function updateDownloadStatus() {
     // Verify the companion extension is active
@@ -349,7 +349,7 @@ document.addEventListener('DOMContentLoaded', () => {
           } else {
             showToast(
               "Extension Not Detected",
-              "Please make sure Developer Mode is enabled in your browser extensions and the folder is loaded unpacked."
+              "Please install or enable the Form 26AS PDF Exporter extension from the Chrome Web Store."
             );
           }
         }, 400);
@@ -1386,6 +1386,29 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
+  // Helper to trigger direct client-side download with proper filename
+  function downloadBase64Pdf(base64Data, filename) {
+    try {
+      const byteCharacters = atob(base64Data);
+      const byteNumbers = new Array(byteCharacters.length);
+      for (let i = 0; i < byteCharacters.length; i++) {
+        byteNumbers[i] = byteCharacters.charCodeAt(i);
+      }
+      const byteArray = new Uint8Array(byteNumbers);
+      const blob = new Blob([byteArray], { type: 'application/pdf' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename || 'Form26AS.pdf';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      setTimeout(() => URL.revokeObjectURL(url), 2000);
+    } catch (err) {
+      console.error('Failed to download base64 PDF:', err);
+    }
+  }
+
   if (bulkDownloadPdfBtn) {
     bulkDownloadPdfBtn.addEventListener('click', () => {
       if (state.selectedBulkViewIndex === null) return;
@@ -1399,7 +1422,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!isLive) {
           showToast(
             "PDF Downloader Helper Offline",
-            "Please load the helper extension in Developer Mode to download your Form 26AS as a PDF."
+            "Please install the Form 26AS PDF Exporter extension from the Chrome Web Store to download your Form 26AS as a PDF."
           );
           return;
         }
@@ -1418,7 +1441,8 @@ document.addEventListener('DOMContentLoaded', () => {
               assesseeName: item.resultData.assesseeName,
               address1: item.resultData.address1,
               address2: item.resultData.address2,
-              panStatus: item.resultData.panStatus
+              panStatus: item.resultData.panStatus,
+              shouldReturnData: true
             }
           },
           (response) => {
@@ -1429,14 +1453,19 @@ document.addEventListener('DOMContentLoaded', () => {
                 <polyline points="7 10 12 15 17 10"></polyline>
                 <line x1="12" y1="15" x2="12" y2="3"></line>
               </svg>
-              Print PDF
+              Download PDF
             `;
-            if (chrome.runtime.lastError || !response || (response.status !== "started" && response.status !== "success" && response.status !== "SUCCESS")) {
+            if (chrome.runtime.lastError || !response || response.status !== "success" || !response.data) {
               console.error("PDF Extension rendering error:", chrome.runtime.lastError || response?.error);
               showToast(
                 "PDF Generation Interrupted",
                 "Failed to communicate with the helper extension. Please ensure it is active and reload if needed."
               );
+            } else {
+              const cleanPan = (item.pan || "").trim().toUpperCase();
+              const cleanAy = (item.ay || "").trim();
+              const filename = response.filename || `Form26AS_${cleanPan}_AY${cleanAy}.pdf`;
+              downloadBase64Pdf(response.data, filename);
             }
           }
         );
@@ -1471,7 +1500,7 @@ document.addEventListener('DOMContentLoaded', () => {
       if (!isLive) {
         showToast(
           "PDF Downloader Helper Offline",
-          "Please load the helper extension in Developer Mode to download your Form 26AS as a PDF."
+          "Please install the Form 26AS PDF Exporter extension from the Chrome Web Store to download your Form 26AS as a PDF."
         );
         return;
       }
@@ -1496,7 +1525,8 @@ document.addEventListener('DOMContentLoaded', () => {
             assesseeName: state.singleData.assesseeName,
             address1: state.singleData.address1,
             address2: state.singleData.address2,
-            panStatus: state.singleData.panStatus
+            panStatus: state.singleData.panStatus,
+            shouldReturnData: true
           }
         },
         (response) => {
@@ -1507,15 +1537,20 @@ document.addEventListener('DOMContentLoaded', () => {
               <polyline points="7 10 12 15 17 10"></polyline>
               <line x1="12" y1="15" x2="12" y2="3"></line>
             </svg>
-            Print PDF
+            Download PDF
           `;
 
-          if (chrome.runtime.lastError || !response || response.status !== "started") {
-            console.error("Extension generation failed:", chrome.runtime.lastError);
+          if (chrome.runtime.lastError || !response || response.status !== "success" || !response.data) {
+            console.error("Extension generation failed:", chrome.runtime.lastError || response?.error);
             showToast(
               "PDF Generation Interrupted",
               "Failed to communicate with the helper extension. Please ensure it is active and reload if needed."
             );
+          } else {
+            const cleanPan = (state.singleData.pan || "").trim().toUpperCase();
+            const cleanAy = (state.singleData.assessmentYear || "").trim();
+            const filename = response.filename || `Form26AS_${cleanPan}_AY${cleanAy}.pdf`;
+            downloadBase64Pdf(response.data, filename);
           }
         }
       );
@@ -2003,7 +2038,7 @@ document.addEventListener('DOMContentLoaded', () => {
       if (!isLive) {
         showToast(
           "PDF Downloader Helper Offline",
-          "Please load the helper extension in Developer Mode to download your Form 26AS PDFs."
+          "Please install the Form 26AS PDF Exporter extension from the Chrome Web Store to download your Form 26AS PDFs."
         );
         return;
       }
@@ -2036,7 +2071,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 reject(new Error(`Failed to generate PDF for ${item.pan}`));
               } else {
                 resolve({
-                  filename: response.filename || `26_${item.pan}_${item.ay}.pdf`,
+                  filename: response.filename || `Form26AS_${item.pan}_AY${item.ay}.pdf`,
                   base64: response.data
                 });
               }
@@ -2047,22 +2082,15 @@ document.addEventListener('DOMContentLoaded', () => {
 
       try {
         if (itemsToDownload.length === 1) {
-          chrome.runtime.sendMessage(
-            EXTENSION_ID,
-            {
-              action: "GENERATE_PDF",
-              payload: {
-                taxData: itemsToDownload[0].rawTaxData,
-                pan: itemsToDownload[0].pan,
-                ay: itemsToDownload[0].ay,
-                assesseeName: itemsToDownload[0].resultData.assesseeName,
-                address1: itemsToDownload[0].resultData.address1,
-                address2: itemsToDownload[0].resultData.address2,
-                panStatus: itemsToDownload[0].resultData.panStatus,
-                shouldReturnData: false
-              }
-            }
-          );
+          const singleItem = itemsToDownload[0];
+          dlPdfBtn.textContent = `Rendering ${singleItem.pan}...`;
+          const pdfResult = await generatePdfBase64(singleItem);
+          if (pdfResult && pdfResult.base64) {
+            const cleanPan = (singleItem.pan || "").trim().toUpperCase();
+            const cleanAy = (singleItem.ay || "").trim();
+            const filename = pdfResult.filename || `Form26AS_${cleanPan}_AY${cleanAy}.pdf`;
+            downloadBase64Pdf(pdfResult.base64, filename);
+          }
         } else {
           const zip = new JSZip();
           for (const item of itemsToDownload) {
@@ -2764,7 +2792,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `Form_26AS_${data.pan}_AY_${data.assessmentYear}.json`;
+    a.download = `Form26AS_${data.pan}_AY${data.assessmentYear}.json`;
     a.click();
     URL.revokeObjectURL(url);
   }
@@ -3082,7 +3110,7 @@ document.addEventListener('DOMContentLoaded', () => {
       if (!isConnected) {
         showToast(
           "PDF Downloader Helper Offline",
-          "Please load the helper extension in Developer Mode to download your Form 26AS as a PDF. Without it, PDF downloads will not work."
+          "Please install the Form 26AS PDF Exporter extension from the Chrome Web Store to enable seamless PDF statement downloads."
         );
       }
     });
